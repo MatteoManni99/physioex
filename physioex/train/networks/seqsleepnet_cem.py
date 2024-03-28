@@ -20,7 +20,7 @@ class SeqSleepNetCEM(SeqtoSeq):
 class SequenceEncoderCEM(SequenceEncoder):
     # TODO replace parameters hardcoded with module_config["cem_...."]
     def __init__(self, module_config):
-        super(SequenceEncoderCEM, self).__init__()
+        super(SequenceEncoderCEM, self).__init__(module_config)
         self.n_concept = module_config["n_classes"] # dummy testing:= n_classes # TODO module_config["n_concept"] 
         self.embedding_dim = 2 # TODO module_config["embedding_dim"]
         self.latent_dim = module_config["latent_space_dim"]
@@ -40,14 +40,15 @@ class SequenceEncoderCEM(SequenceEncoder):
     
 class CEM(nn.Module):
     def __init__(self, input_dim, n_concept, embedding_dim, concept_activations):
-        super(CEM, self).__init__()
+        super().__init__()
         self.concept_activations = concept_activations
-        
+        self.n_concept = n_concept
+
         self.input2candidateConcepts = nn.ModuleList([
             nn.Sequential(
                 nn.Linear(input_dim, embedding_dim),
                 nn.LeakyReLU(),)
-            for i in range(n_concept*2)]
+            for _ in range(self.n_concept*2)]
         )
 
         self.score_function = nn.Sequential(
@@ -55,17 +56,26 @@ class CEM(nn.Module):
             nn.Sigmoid(),
         )
         
-    def forword(self, x):
+    def forward(self, x):
         concepts = []
         for i in range(self.n_concept):
+            print("\nn_concept:" + str(i))
+
             c_plus = self.input2candidateConcepts[i](x)
+            print("c_plus" + str(c_plus.shape))
             c_minus = self.input2candidateConcepts[i+1](x)
-            c = torch.cat((c_plus, c_minus), 1) #volendo si potrebbe fare anche in verticale, quindi sulla dimensione 2 
+            print("c_minus" + str(c_minus.shape))
+            
+            c = torch.cat((c_plus, c_minus), 2) #volendo si potrebbe fare anche la concatenazione aggiungendo un'altra dimensione
+            print("c" + str(c.shape))
+            
             score = self.score_function(c)
+            print("score" + str(score.shape))
+            
             concept = score * c_plus + (1-score) * c_minus
             concepts.append(concept)
 
             self.concept_activations.append(score) #to take trace for the loss function about the concept activations
 
-        return torch.cat(concepts, 1)
+        return torch.cat(concepts, 2)
 
