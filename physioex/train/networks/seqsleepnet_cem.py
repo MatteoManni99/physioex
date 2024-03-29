@@ -18,24 +18,24 @@ class SeqSleepNetCEM(SeqtoSeq):
         )
 
 class SequenceEncoderCEM(SequenceEncoder):
-    # TODO replace parameters hardcoded with module_config["cem_...."]
     def __init__(self, module_config):
         super(SequenceEncoderCEM, self).__init__(module_config)
-        self.n_concept = module_config["n_classes"] # dummy testing:= n_classes # TODO module_config["n_concept"] 
-        self.embedding_dim = 2 # TODO module_config["embedding_dim"]
+        self.n_concept = module_config["n_concepts"]
+        self.embedding_dim = module_config["embedding_dim"]
         self.latent_dim = module_config["latent_space_dim"]
         self.concept_activations = []
         
         self.cem = CEM(self.latent_dim, self.n_concept, self.embedding_dim, self.concept_activations)
 
         self.cls = nn.Linear(
-            self.n_concept * self.embedding_dim, module_config["n_classes"] 
+            self.n_concept * self.embedding_dim, module_config["n_classes"]
         )
 
     def forward(self, x):
         x = self.encode(x)
         x = self.cem(x)
         x = self.cls(x)
+        #return x, self.concept_activations
         return x
     
 class CEM(nn.Module):
@@ -47,7 +47,7 @@ class CEM(nn.Module):
         self.input2candidateConcepts = nn.ModuleList([
             nn.Sequential(
                 nn.Linear(input_dim, embedding_dim),
-                nn.LeakyReLU(),)
+                nn.LeakyReLU()) #TODO aggiungere le altre attivazioni
             for _ in range(self.n_concept*2)]
         )
 
@@ -55,27 +55,18 @@ class CEM(nn.Module):
             nn.Linear(embedding_dim*2, 1),
             nn.Sigmoid(),
         )
+        #print(sum(p.numel() for p in self.parameters() if p.requires_grad))
         
     def forward(self, x):
         concepts = []
+        self.concept_activations.clear()
         for i in range(self.n_concept):
-            print("\nn_concept:" + str(i))
-
             c_plus = self.input2candidateConcepts[i](x)
-            print("c_plus" + str(c_plus.shape))
             c_minus = self.input2candidateConcepts[i+1](x)
-            print("c_minus" + str(c_minus.shape))
-            
             c = torch.cat((c_plus, c_minus), 2) #volendo si potrebbe fare anche la concatenazione aggiungendo un'altra dimensione
-            print("c" + str(c.shape))
-            
             score = self.score_function(c)
-            print("score" + str(score.shape))
-            
             concept = score * c_plus + (1-score) * c_minus
             concepts.append(concept)
-
-            self.concept_activations.append(score) #to take trace for the loss function about the concept activations
-
+            self.concept_activations.append(score) #to take trace of the concept activations for the loss function
         return torch.cat(concepts, 2)
 
