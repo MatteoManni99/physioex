@@ -17,31 +17,65 @@ class SeqSleepNetCEM(SeqtoSeq):
             EpochEncoder(module_config), SequenceEncoderCEM(module_config), module_config
         )
 
+    def compute_loss(
+        self,
+        embeddings,
+        outputs,
+        targets,
+        log: str = "train",
+        log_metrics: bool = False,
+    ):
+        # print(targets.size())
+        batch_size, seq_len, n_class = outputs.size()
+
+        activations = embeddings[1] #embedding[0] = concepts_embedding ; embeddings[1] = concept_activations
+        activations = activations.reshape(batch_size * seq_len, -1)
+        outputs = outputs.reshape(-1, n_class)
+        targets = targets.reshape(-1)
+
+        loss = self.loss(activations, outputs, targets)
+
+        self.log(f"{log}_loss", loss, prog_bar=True)
+        self.log(f"{log}_acc", self.acc(outputs, targets), prog_bar=True)
+        self.log(f"{log}_f1", self.f1(outputs, targets), prog_bar=True)
+
+        if log_metrics:
+            self.log(f"{log}_ck", self.ck(outputs, targets))
+            self.log(f"{log}_pr", self.pr(outputs, targets))
+            self.log(f"{log}_rc", self.rc(outputs, targets))
+
+        return loss
+
 class SequenceEncoderCEM(SequenceEncoder):
     def __init__(self, module_config):
         super(SequenceEncoderCEM, self).__init__(module_config)
         self.n_concept = module_config["n_concepts"]
         self.embedding_dim = module_config["embedding_dim"]
         self.latent_dim = module_config["latent_space_dim"]
-        self.concept_activations = []
+        #self.concept_activations = []
         
-        self.cem = CEM(self.latent_dim, self.n_concept, self.embedding_dim, self.concept_activations)
+        #self.cem = CEM(self.latent_dim, self.n_concept, self.embedding_dim, self.concept_activations)
+        self.cem = CEM(self.latent_dim, self.n_concept, self.embedding_dim)
 
         self.cls = nn.Linear(
             self.n_concept * self.embedding_dim, module_config["n_classes"]
         )
 
     def forward(self, x):
-        x = self.encode(x)
-        x = self.cem(x)
+        x, _ = self.encode(x)
         x = self.cls(x)
         #return x, self.concept_activations
         return x
     
+    def encode(self, x):
+        x = super().encode(x)
+        embedding, activations = self.cem(x)
+        return embedding, activations
+
 class CEM(nn.Module):
-    def __init__(self, input_dim, n_concept, embedding_dim, concept_activations):
+    def __init__(self, input_dim, n_concept, embedding_dim):
         super().__init__()
-        self.concept_activations = concept_activations
+        #self.concept_activations = concept_activations
         self.n_concept = n_concept
 
         self.input2candidateConcepts = nn.ModuleList([
@@ -59,7 +93,7 @@ class CEM(nn.Module):
         
     def forward(self, x):
         concepts = []
-        self.concept_activations.clear()
+        concept_activations = []
         for i in range(self.n_concept):
             c_plus = self.input2candidateConcepts[i](x)
             c_minus = self.input2candidateConcepts[i+1](x)
@@ -67,6 +101,6 @@ class CEM(nn.Module):
             score = self.score_function(c)
             concept = score * c_plus + (1-score) * c_minus
             concepts.append(concept)
-            self.concept_activations.append(score) #to take trace of the concept activations for the loss function
-        return torch.cat(concepts, 2)
+            concept_activations.append(score) #to take trace of the concept activations for the loss function
+        return torch.cat(concepts, 2), torch.stack(concept_activations, 2)
 
