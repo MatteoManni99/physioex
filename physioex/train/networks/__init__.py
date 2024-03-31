@@ -50,5 +50,5 @@ config = {
         "module": SeqSleepNetCEM,
         "input_transform": input_transform.xsleepnet_transform,
         "target_transform": None,
-    }
+    },
 }

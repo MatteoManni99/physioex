@@ -49,7 +49,9 @@ class CrossEntropyLoss(nn.Module, PhysioExLoss):
     def forward(self, emb, preds, targets):
         return self.ce_loss(preds, targets)
 
-class CrossEntropyLossCEM (nn.Module, PhysioExLoss): #TODO extend concepts to non dummy concepts
+
+class CrossEntropyLossCEM(nn.Module, PhysioExLoss):
+    # TODO extend concepts to non dummy concepts
     def __init__(self, params: Dict = None):
         super(CrossEntropyLossCEM, self).__init__()
 
@@ -63,7 +65,13 @@ class CrossEntropyLossCEM (nn.Module, PhysioExLoss): #TODO extend concepts to no
 
     def forward(self, emb, preds, targets):
         loss_target = self.ce_loss_target(preds, targets)
-        loss_concepts = self.ce_loss_concepts(emb, targets) #TODO substitute targets with target_comcepts
-        return  loss_target + loss_concepts
+        # TODO substitute targets with target_comcepts
+        loss_concepts = self.ce_loss_concepts(emb, targets)
+        return loss_target + loss_concepts
 
-config = {"cel": CrossEntropyLoss, "scl": SimilarityCombinedLoss, "cel_cem": CrossEntropyLossCEM}
+
+config = {
+    "cel": CrossEntropyLoss,
+    "scl": SimilarityCombinedLoss,
+    "cel_cem": CrossEntropyLossCEM,
+}
