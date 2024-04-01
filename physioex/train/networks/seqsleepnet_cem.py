@@ -21,7 +21,7 @@ class SeqSleepNetCEM(SeqtoSeq):
 
     def compute_loss(
         self,
-        embeddings,
+        concepts,
         outputs,
         targets,
         log: str = "train",
@@ -30,8 +30,8 @@ class SeqSleepNetCEM(SeqtoSeq):
         # print(targets.size())
         batch_size, seq_len, n_class = outputs.size()
 
-        # embedding[0] = concepts_embedding ; embeddings[1] = concept_activations
-        activations = embeddings[1]
+        # concepts[0] = concepts_embedding ; concepts[1] = concept_activations
+        activations = concepts[1]
         activations = activations.reshape(batch_size * seq_len, -1)
         outputs = outputs.reshape(-1, n_class)
         targets = targets.reshape(-1)
@@ -55,13 +55,13 @@ class SequenceEncoderCEM(SequenceEncoder):
     def __init__(self, module_config):
         super(SequenceEncoderCEM, self).__init__(module_config)
         self.n_concept = module_config["n_concepts"]
-        self.embedding_dim = module_config["embedding_dim"]
+        self.concept_dim = module_config["concept_dim"]
         self.latent_dim = module_config["latent_space_dim"]
 
-        self.cem = CEM(self.latent_dim, self.n_concept, self.embedding_dim)
+        self.cem = CEM(self.latent_dim, self.n_concept, self.concept_dim)
 
         self.cls = nn.Linear(
-            self.n_concept * self.embedding_dim, module_config["n_classes"]
+            self.n_concept * self.concept_dim, module_config["n_classes"]
         )
 
     def forward(self, x):
@@ -76,20 +76,20 @@ class SequenceEncoderCEM(SequenceEncoder):
 
 
 class CEM(nn.Module):
-    def __init__(self, input_dim, n_concept, embedding_dim):
+    def __init__(self, input_dim, n_concept, concept_dim):
         super().__init__()
         # self.concept_activations = concept_activations
         self.n_concept = n_concept
         # TODO aggiungere le altre attivazioni
         self.input2candidateConcepts = nn.ModuleList(
             [
-                nn.Sequential(nn.Linear(input_dim, embedding_dim), nn.LeakyReLU())
+                nn.Sequential(nn.Linear(input_dim, concept_dim), nn.LeakyReLU())
                 for _ in range(self.n_concept * 2)
             ]
         )
 
         self.score_function = nn.Sequential(
-            nn.Linear(embedding_dim * 2, 1),
+            nn.Linear(concept_dim * 2, 1),
             nn.Sigmoid(),
         )
 
