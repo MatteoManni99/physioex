@@ -1,4 +1,4 @@
-n_classes: 5
+n_classes: 2
 latent_space_dim: 32
 batch_size: 32
 in_chan: 1
@@ -23,6 +23,8 @@ adam_epsilon: 1e-8
 #previews parameters are shared with seqsleepnet.yaml
 
 n_concepts: 5
-concept_dim: 2
-
+concept_dim: 8
+#set class_division only if you are in a binary classification problem and in the dataset there are more then 2 classes
+#example class_division: ((0,), (1, 2, 3, 4)) it will merge 1, 2, 3, 4 classes in a single class
+class_division: ((0,), (1, 2, 3, 4))
 
