@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from pytorch_lightning.utilities.types import OptimizerLRScheduler
 import torchmetrics as tm
+from physioex.train.networks.utils.loss import BCELoss, CrossEntropyLoss
 
 from physioex.train.networks.base import SeqtoSeq
 from physioex.train.networks.seqsleepnet import EpochEncoder, SequenceEncoder
@@ -19,7 +20,60 @@ class SeqSleepNetCEM(SeqtoSeq):
             SequenceEncoderCEM(module_config),
             module_config,
         )
-        self.class_division = eval(module_config["class_division"])
+        self.n_classes = module_config["n_classes"]
+        self.n_concept = module_config["n_concept"]
+        self.class_division = eval(module_config["class_division"]) if module_config.get("class_division") is not None else None
+        self.training_type = module_config["training_type"]
+        #alpha is the parameter for the concept loss scaling in the end_to_end training
+        self.alpha = float(module_config["alpha"])
+        #optimizer parameters
+        self.lr = float(module_config["learning_rate"])
+        self.adam_b_1 = float(module_config["adam_beta_1"])
+        self.adam_b_2 = float(module_config["adam_beta_2"])
+        self.adam_e = float(module_config["adam_epsilon"])
+
+        if self.training_type == "modular_1":
+            self.automatic_optimization = False
+
+        if self.n_concept > 2:
+            self.loss_cocept = CrossEntropyLoss(module_config["loss_params"])
+            self.acc_concept = tm.Accuracy(task="multiclass", num_classes=self.n_concept, average="weighted")
+            self.f1_concept = tm.F1Score(task="multiclass", num_classes=self.n_concept, average="weighted")
+            self.ck_concept = tm.CohenKappa(task="multiclass", num_classes=self.n_concept)
+            self.pr_concept = tm.Precision(task="multiclass", num_classes=self.n_concept, average="weighted")
+            self.rc_concept = tm.Recall(task="multiclass", num_classes=self.n_concept, average="weighted")
+
+        if self.n_classes > 2:
+            self.loss = CrossEntropyLoss(module_config["loss_params"])
+            self.acc_target = self.acc
+            self.f1_target = self.f1
+            self.ck_target = self.ck
+            self.pr_target = self.pr
+            self.rc_target = self.rc
+        else:
+            if module_config["loss_params"].get("class_weights") is not None:
+                self.weights = torch.zeros(2, requires_grad=False)
+                base_weights = module_config["loss_params"].get("class_weights")
+                if self.class_division is None:
+                    self.weights = base_weights
+                else:
+                    base_weights = 1/base_weights
+                    for i in self.class_division[0]:
+                        self.weights[0] += base_weights[i]
+                    for i in self.class_division[1]:
+                        self.weights[1] += base_weights[i]
+                    self.weights = 1/self.weights
+                    self.weights = self.weights / self.weights.sum()
+            else:
+                self.weights = None
+            module_config["loss_params"]["binary_class_weights"] = self.weights
+            self.loss_binary = BCELoss(module_config["loss_params"])
+            self.acc_target = tm.Accuracy(task="binary")
+            self.f1_target = tm.F1Score(task="binary")
+            self.ck_target = tm.CohenKappa(task="binary")
+            self.pr_target = tm.Precision(task="binary")
+            self.rc_target = tm.Recall(task="binary")
+
 
     def compute_loss(
         self,
@@ -29,61 +83,115 @@ class SeqSleepNetCEM(SeqtoSeq):
         log: str = "train",
         log_metrics: bool = False,
     ):
-        # print(targets.size())
-        batch_size, seq_len, n_class = outputs.size()
-
-        # concepts[0] = concepts_embedding ; concepts[1] = concept_activations
+        #concepts[0] = concepts_embedding; concepts[1] = concepts_activations
         activations = concepts[1]
-        activations = activations.reshape(batch_size * seq_len, -1)
-        
-        #TODO sistemare i target; attualmente funziona solo se i concetti e le classi sono uguali
+        activations = activations.reshape(-1, self.n_concept)
         targets = targets.reshape(-1)
+        act_targets = targets
+        loss_concept = self.loss_cocept(None, activations, act_targets)
 
-        if n_class > 2:
-            outputs = outputs.reshape(-1, n_class)
+        if self.n_classes > 2:
+            #TODO controllare che questo caso funzioni e risulatati invariati 
+            outputs = outputs.reshape(-1, self.n_classes)
+            class_targets = targets
+            loss_target = self.loss(None, outputs, class_targets)
         else:
             #Binary case
             outputs = outputs.reshape(-1)
             if(self.class_division != None):
-                binary_targets = torch.tensor([0 if t in self.class_division[0] else 1 for t in targets], dtype=torch.float32).to('cuda')
-                concepts_targets = targets.reshape(-1)
-                targets = (binary_targets, concepts_targets)
+                class_targets = torch.tensor([0 if t in self.class_division[0] else 1 for t in targets], dtype=torch.float32).to('cuda')
+                loss_target = self.loss_binary(None, outputs, class_targets)
             else:
-                print("class division is None") #TODO testare come entrare in questo caso cambiando il config
+                print("class division is None")
 
-        # TODO fare l'assert della loss perché funziona solo con alcune loss
-        # TODO raffinare la logica di questa funzione
-        loss = self.loss(activations, outputs, targets)
+        self.log_function(log, log_metrics, loss_concept, loss_target, activations, outputs, act_targets, class_targets)
 
-        if n_class <= 2:
-            targets = targets[0]
-            self.acc = tm.Accuracy(task="binary").to("cuda")
-            self.f1 = tm.F1Score(task="binary").to("cuda")
-            self.ck = tm.CohenKappa(task="binary").to("cuda")
-            self.pr = tm.Precision(task="binary").to("cuda")
-            self.rc = tm.Recall(task="binary").to("cuda")
-        
-        #TODO questa parte potrebbe essere sposata in un'altra funzione (indipendente dal calcolo della loss) 
-        self.log(f"{log}_loss", loss, prog_bar=True)
-        self.log(f"{log}_acc", self.acc(outputs, targets), prog_bar=True)
-        self.log(f"{log}_f1", self.f1(outputs, targets), prog_bar=True)
+        if self.training_type == "end_to_end":
+            return self.alpha * loss_concept + loss_target
+        elif self.training_type == "modular_1":
+            return loss_concept, loss_target
+
+    def training_step(self, batch, batch_idx):
+        if(self.training_type == "end_to_end"):
+            return super().training_step(batch, batch_idx)
+        elif self.training_type == "modular_1":
+            inputs, targets = batch
+            concepts, outputs = self.encode(inputs)
+            opt_cem, opt = self.optimizers()
+
+            loss_cem, loss_target = self.compute_loss(concepts, outputs, targets)
+
+            opt_cem.zero_grad()
+            self.manual_backward(loss_cem, retain_graph=True)
+            opt.zero_grad()
+            self.manual_backward(loss_target)
+
+            opt_cem.step()
+            opt.step()
+            
+    # def validation_step(self, batch, batch_idx):
+    #     if(self.training_type == "end_to_end"):
+    #         return super().validation_step(batch, batch_idx)
+    #     elif self.training_type == "modular_1":
+    #         inputs, targets = batch
+    #         concepts, outputs = self.encode(inputs)
+
+    #         return self.compute_loss(concepts, outputs, targets, "val")
+
+    # def test_step(self, batch, batch_idx):
+    #     if(self.training_type == "end_to_end"):
+    #         return super().test_step(batch, batch_idx)
+    #     elif self.training_type == "modular_1":
+    #         inputs, targets = batch
+    #         concepts, outputs = self.encode(inputs)
+
+    #         return self.compute_loss(concepts, outputs, targets, "test", log_metrics=True)
+    
+    def configure_optimizers(self):
+        if(self.training_type == "end_to_end"):
+            return super().configure_optimizers()
+        elif self.training_type == "modular_1":
+            params = list(self.nn.epoch_encoder.parameters()) + \
+                    list(self.nn.sequence_encoder.LSTM.parameters()) + \
+                    list(self.nn.sequence_encoder.proj.parameters()) + \
+                    list(self.nn.sequence_encoder.norm.parameters()) + \
+                    list(self.nn.sequence_encoder.cls.parameters())
+                    
+            params_cem = list(self.nn.sequence_encoder.cem.parameters())
+
+            optimizer_cem = torch.optim.Adam(params_cem,
+                                             lr=self.lr*10,betas=(self.adam_b_1,self.adam_b_2,),eps=self.adam_e,
+                                             )
+            optimizer = torch.optim.Adam(params,
+                                         lr=self.lr,betas=(self.adam_b_1,self.adam_b_2,),eps=self.adam_e,
+                                         )
+            
+            return optimizer_cem, optimizer
+    
+    def log_function (self, log, log_metrics, loss_concept , loss_target, activations, outputs, act_targets, targets):
+        self.log(f"{log}_loss_target", loss_target, prog_bar=True)
+        self.log(f"{log}_loss_concept", loss_concept, prog_bar=True)
+        self.log(f"{log}_acc", self.acc_target(outputs, targets), prog_bar=True)
+        self.log(f"{log}_acc_concept", self.acc_concept(activations, act_targets), prog_bar=True)
+        self.log(f"{log}_f1", self.f1_target(outputs, targets), prog_bar=True)
+        self.log(f"{log}_f1_concept", self.f1_concept(activations, act_targets), prog_bar=True)
 
         if log_metrics:
-            self.log(f"{log}_ck", self.ck(outputs, targets))
-            self.log(f"{log}_pr", self.pr(outputs, targets))
-            self.log(f"{log}_rc", self.rc(outputs, targets))
-
-        return loss
-
+            self.log(f"{log}_loss_target", loss_target, prog_bar=True)
+            self.log(f"{log}_loss_concept", loss_concept, prog_bar=True)
+            self.log(f"{log}_ck", self.ck_target(outputs, targets))
+            self.log(f"{log}_pr", self.pr_target(outputs, targets))
+            self.log(f"{log}_pr_concept", self.pr_concept(activations, act_targets))
+            self.log(f"{log}_rc", self.rc_target(outputs, targets))
+            self.log(f"{log}_rc_concept", self.rc_concept(activations, act_targets))        
 
 class SequenceEncoderCEM(SequenceEncoder):
     def __init__(self, module_config):
         super(SequenceEncoderCEM, self).__init__(module_config)
-        self.n_classes = module_config["n_classes"]
-        self.n_concept = module_config["n_concepts"]
         self.concept_dim = module_config["concept_dim"]
         self.latent_dim = module_config["latent_space_dim"]
-
+        self.n_classes = module_config["n_classes"]
+        self.n_concept = module_config["n_concept"]
         self.cem = CEM(self.latent_dim, self.n_concept, self.concept_dim)
 
         if self.n_classes > 2:

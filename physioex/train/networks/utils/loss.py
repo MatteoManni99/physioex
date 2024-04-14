@@ -62,7 +62,23 @@ class CrossEntropyLossCEM(nn.Module, PhysioExLoss):
         loss_concepts = self.ce_loss_concepts(activations, targets)
         return loss_target + loss_concepts
 
+class BCELoss(nn.Module, PhysioExLoss):
+    def __init__(self, params: Dict = None):
+        super(BCELoss, self).__init__()
 
+        # check if class weights are provided in params
+        self.weights = params.get("binary_class_weights") if params is not None else None
+        self.bce_loss = nn.BCELoss()
+
+    def forward(self, emb, preds, targets):
+        if (self.weights is not None):
+            weights = torch.where(targets == 0, self.weights[0], self.weights[1]).to('cuda')
+        else:
+            weights = None
+
+        #self.bce_loss = nn.BCELoss(weight=weights)
+        return self.bce_loss(preds, targets)
+    
 class BCELossCEM(nn.Module, PhysioExLoss):
     def __init__(self, params: Dict = None):
         super(BCELossCEM, self).__init__()
