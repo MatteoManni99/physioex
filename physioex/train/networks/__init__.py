@@ -47,7 +47,7 @@ config = {
     "seqsleepnet_cem": {
         "module_config": read_config("seqsleepnet_cem"),
         "module": SeqSleepNetCEM,
-        "input_transform": input_transform.xsleepnet_transform,
+        "input_transform": "xsleepnet",
         "target_transform": None,
     },
 }

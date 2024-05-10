@@ -9,9 +9,7 @@ from lightning.pytorch import seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint, RichProgressBar
 
 from physioex.data import TimeDistributedModule, datasets
-from physioex.train.networks import config
-from physioex.train.networks.utils.loss import config as loss_config
-from autoencoder import AutoEncoder
+from physioex.train.ssnetworks import config
 
 folds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
@@ -22,35 +20,32 @@ from loguru import logger
 
 torch.set_float32_matmul_precision("medium")
 
-def main():
-    AutoEncoderTrainer().run()
 
-class AutoEncoderTrainer:
+class SelfSupervisedTrainer:
     def __init__(
         self,
-        model_name: str = "chambon2018",
+        model_name: str = "base_ae",
         dataset_name: str = "sleep_physioex",
-        loss_name: str = "cel",
+        #loss_name: str = "cel",
         ckp_path: str = None,
         version: str = "2018",
         use_cache: bool = True,
-        sequence_lenght: int = 3,
+        sequence_lenght: int = 1,
         max_epoch: int = 20,
         val_check_interval: int = 300,
         batch_size: int = 32,
         n_jobs: int = 10,
-        imbalance: bool = False,
     ):
 
         seed_everything(42, workers=True)
 
         self.dataset_call = datasets[dataset_name]
 
-        # self.model_call = config[model_name]["module"]
-        # self.input_transform = config[model_name]["input_transform"]
-        # self.target_transform = config[model_name]["target_transform"]
-        # self.module_config = config[model_name]["module_config"]
-        # self.module_config["seq_len"] = sequence_lenght
+        self.model_call = config[model_name]["module"]
+        self.input_transform = config[model_name]["input_transform"]
+        #self.target_transform = config[model_name]["target_transform"]
+        self.module_config = config[model_name]["module_config"]
+        self.module_config["seq_len"] = sequence_lenght
 
         self.batch_size = batch_size
         self.max_epoch = max_epoch
@@ -58,8 +53,6 @@ class AutoEncoderTrainer:
         self.version = version
         self.use_cache = use_cache
         self.n_jobs = n_jobs
-
-        self.imbalance = imbalance
 
         if ckp_path is None:
             self.ckp_path = "models/" + str(uuid.uuid4()) + "/"
@@ -72,8 +65,6 @@ class AutoEncoderTrainer:
         self.dataset = self.dataset_call(version=self.version, use_cache=self.use_cache)
         logger.info("Dataset loaded")
 
-        self.module_config["loss_call"] = loss_config[loss_name]
-        self.module_config["loss_params"] = dict()
 
     def train_evaluate(self, fold: int = 0):
 
@@ -89,31 +80,21 @@ class AutoEncoderTrainer:
             sequence_lenght=self.module_config["seq_len"],
             batch_size=self.batch_size,
             transform=self.input_transform,
-            target_transform=self.target_transform,
+            #target_transform=self.target_transform,
         )
 
-        self.module_config["loss_params"]["class_weights"] = datamodule.class_weights()
-
-        module = self.model_call(module_config=self.module_config)
+        module = self.model_call(config=self.module_config)
 
         # Definizione delle callback
-        if self.imbalance:
-            checkpoint_callback = ModelCheckpoint(
-                monitor="val_f1",
-                save_top_k=1,
-                mode="max",
-                dirpath=self.ckp_path,
-                filename="fold=%d-{epoch}-{step}-{val_f1:.2f}" % fold,
-            )
-        else:
-            checkpoint_callback = ModelCheckpoint(
-                monitor="val_acc",
-                save_top_k=1,
-                mode="max",
-                dirpath=self.ckp_path,
-                filename="fold=%d-{epoch}-{step}-{val_acc:.2f}" % fold,
-            )
-
+        
+        checkpoint_callback = ModelCheckpoint(
+            monitor="val_loss",
+            save_top_k=1,
+            mode="max",
+            dirpath=self.ckp_path,
+            filename="fold=%d-{epoch}-{step}-{val_loss:.2f}" % fold,
+        )
+        
         progress_bar_callback = RichProgressBar()
 
         # Configura il trainer con le callback
@@ -142,6 +123,11 @@ class AutoEncoderTrainer:
         results = Parallel(n_jobs=self.n_jobs)(
             delayed(self.train_evaluate)(fold) for fold in folds
         )
+
+        # results = []
+        # for fold in folds:
+        #     results.append(self.train_evaluate(fold))
+        #     gc.collect()
 
         logger.info("Results successfully collected from jobs pool")
 

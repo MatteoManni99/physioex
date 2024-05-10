@@ -1,0 +1,11 @@
+latent_dim: 16
+
+# Encoder
+n_encoder_hlayers: 3
+encoder_hlayer_sizes: [128, 128, 128]
+encoder_act_fun: leakyrelu
+
+# Decoder
+n_decoder_hlayers: 3
+decoder_hlayer_sizes: [128, 128, 128]
+decoder_act_fun: leakyrelu
