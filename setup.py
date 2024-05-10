@@ -11,6 +11,7 @@ setup(
     entry_points={
         "console_scripts": [
             "train=train:main",
+            "sstrain=sstrain:main",
         ],
     },
 )
