@@ -18,17 +18,17 @@ class SleepModule(pl.LightningModule):
 
         # metrics
         self.acc = tm.Accuracy(
-            task="multiclass", num_classes=config["n_classes"], average="weighted"
+            task="multiclass", num_classes=config["n_classes"]#, average="weighted"
         )
         self.f1 = tm.F1Score(
-            task="multiclass", num_classes=config["n_classes"], average="weighted"
+            task="multiclass", num_classes=config["n_classes"]#, average="weighted"
         )
         self.ck = tm.CohenKappa(task="multiclass", num_classes=config["n_classes"])
         self.pr = tm.Precision(
-            task="multiclass", num_classes=config["n_classes"], average="weighted"
+            task="multiclass", num_classes=config["n_classes"]#, average="weighted"
         )
         self.rc = tm.Recall(
-            task="multiclass", num_classes=config["n_classes"], average="weighted"
+            task="multiclass", num_classes=config["n_classes"]#, average="weighted"
         )
 
         # loss

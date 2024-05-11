@@ -7,66 +7,44 @@ from pytorch_lightning.utilities.types import OptimizerLRScheduler
 import torchmetrics as tm
 from physioex.train.networks.utils.loss import CrossEntropyLoss
 
-from physioex.train.networks.base import SeqtoSeq
+from physioex.train.networks.base import SleepModule
 from physioex.train.networks.seqsleepnet import EpochEncoder, SequenceEncoder
 
 module_config = dict()
 
-
-class SeqSleepNetCEM(SeqtoSeq):
+class SeqSleepNetCEM(SleepModule):
     def __init__(self, module_config=module_config):
-        super(SeqSleepNetCEM, self).__init__(
-            EpochEncoder(module_config),
-            SequenceEncoderCEM(module_config),
-            module_config,
-        )
+        super(SeqSleepNetCEM, self).__init__(Net(module_config), module_config)
+
         self.n_classes = module_config["n_classes"]
         self.n_concept = module_config["n_concept"]
         self.class_division = eval(module_config["class_division"]) if module_config.get("class_division") is not None else None
-        self.training_type = module_config["training_type"]
         #alpha is the parameter for the concept loss scaling in the end_to_end training
         self.alpha = float(module_config["alpha"])
-        #optimizer parameters
-        self.lr = float(module_config["learning_rate"])
-        self.adam_b_1 = float(module_config["adam_beta_1"])
-        self.adam_b_2 = float(module_config["adam_beta_2"])
-        self.adam_e = float(module_config["adam_epsilon"])
 
-        if self.training_type == "modular_1":
-            self.automatic_optimization = False
-
-        module_config["loss_params"]["class_weights"] = None
-
+        #defining loss and measures for concepts
         self.loss_cocept = CrossEntropyLoss(module_config["loss_params"])
-        self.acc_concept = tm.Accuracy(task="multiclass", num_classes=self.n_concept, average="weighted")
-        self.f1_concept = tm.F1Score(task="multiclass", num_classes=self.n_concept, average="weighted")
+        self.acc_concept = tm.Accuracy(
+            task="multiclass", num_classes=self.n_concept#, average="weighted"
+        )
+        self.f1_concept = tm.F1Score(
+            task="multiclass", num_classes=self.n_concept#, average="weighted"
+        )
         self.ck_concept = tm.CohenKappa(task="multiclass", num_classes=self.n_concept)
-        self.pr_concept = tm.Precision(task="multiclass", num_classes=self.n_concept, average="weighted")
-        self.rc_concept = tm.Recall(task="multiclass", num_classes=self.n_concept, average="weighted")
-
-        # if(self.class_division != None):
-        #     if module_config["loss_params"].get("class_weights") is not None:
-        #         self.weights = torch.zeros(2, requires_grad=False)
-        #         base_weights = module_config["loss_params"].get("class_weights")
-                
-        #         base_weights = 1/base_weights
-        #         for i in self.class_division[0]:
-        #             self.weights[0] += base_weights[i]
-        #         for i in self.class_division[1]:
-        #             self.weights[1] += base_weights[i]
-        #         self.weights = 1/self.weights
-        #         self.weights = self.weights / self.weights.sum()
-        #     else:
-        #         self.weights = None
-        #     module_config["loss_params"]["class_weights"] = self.weights
+        self.pr_concept = tm.Precision(
+            task="multiclass", num_classes=self.n_concept#, average="weighted"
+        )
+        self.rc_concept = tm.Recall(
+            task="multiclass", num_classes=self.n_concept#, average="weighted"
+        )
         
+        #defining loss and measures for classes
         self.loss = CrossEntropyLoss(module_config["loss_params"])
         self.acc_target = self.acc
         self.f1_target = self.f1
         self.ck_target = self.ck
         self.pr_target = self.pr
         self.rc_target = self.rc
-        
 
     def compute_loss(
         self,
@@ -96,10 +74,97 @@ class SeqSleepNetCEM(SeqtoSeq):
         loss_target = self.loss(None, outputs, class_targets)
         self.log_function(log, log_metrics, loss_concept, loss_target, activations, outputs, act_targets, class_targets)
 
-        if self.training_type == "end_to_end":
-            return self.alpha * loss_concept + loss_target
-        elif self.training_type == "modular_1":
-            return loss_concept, loss_target
+        return self.alpha * loss_concept + loss_target
+    
+    def log_function (self, log, log_metrics, loss_concept , loss_target, activations, outputs, act_targets, targets):
+        self.log(f"{log}_loss_target", loss_target, prog_bar=True)
+        self.log(f"{log}_loss_concept", loss_concept, prog_bar=True)
+        self.log(f"{log}_acc", self.acc_target(outputs, targets))
+        self.log(f"{log}_acc_concept", self.acc_concept(activations, act_targets))
+        self.log(f"{log}_f1", self.f1_target(outputs, targets))
+        self.log(f"{log}_f1_concept", self.f1_concept(activations, act_targets))
+        if log_metrics:
+            None
+
+
+class Net(nn.Module):
+    def __init__(self, module_config=module_config):
+        super().__init__()
+
+        self.epoch_encoder = EpochEncoder(module_config)
+        self.sequence_encoder_cem = SequenceEncoderCEM(module_config)
+
+    def encode(self, x):
+
+        batch, L, nchan, T, F = x.size()
+
+        x = x.reshape(-1, nchan, T, F)
+
+        x = self.epoch_encoder(x)
+
+        x = x.reshape(batch, L, -1)
+
+        x = self.sequence_encoder_cem.encode(x)
+
+        x = self.sequence_encoder_cem(x)
+
+        y = self.sequence_encoder_cem.clf(x)
+
+        return x, y
+
+    def forward(self, x):
+        x, y = self.encode(x)
+        return y
+
+
+class SeqSleepNetCEM_old(SleepModule):
+    def __init__(self, module_config=module_config):
+        super(SeqSleepNetCEM, self).__init__(
+            EpochEncoder(module_config),
+            SequenceEncoderCEM(module_config),
+            module_config,
+        )
+        self.n_classes = module_config["n_classes"]
+        self.n_concept = module_config["n_concept"]
+        self.class_division = eval(module_config["class_division"]) if module_config.get("class_division") is not None else None
+        self.training_type = module_config["training_type"]
+        #alpha is the parameter for the concept loss scaling in the end_to_end training
+        self.alpha = float(module_config["alpha"])
+        #optimizer parameters
+        self.lr = float(module_config["learning_rate"])
+        self.adam_b_1 = float(module_config["adam_beta_1"])
+        self.adam_b_2 = float(module_config["adam_beta_2"])
+        self.adam_e = float(module_config["adam_epsilon"])
+
+        if self.training_type == "modular_1":
+            self.automatic_optimization = False
+
+        module_config["loss_params"]["class_weights"] = None
+
+        self.loss_cocept = CrossEntropyLoss(module_config["loss_params"])
+        self.acc_concept = tm.Accuracy(
+            task="multiclass", num_classes=self.n_concept#, average="weighted"
+        )
+        self.f1_concept = tm.F1Score(
+            task="multiclass", num_classes=self.n_concept#, average="weighted"
+        )
+        self.ck_concept = tm.CohenKappa(task="multiclass", num_classes=self.n_concept)
+        self.pr_concept = tm.Precision(
+            task="multiclass", num_classes=self.n_concept#, average="weighted"
+        )
+        self.rc_concept = tm.Recall(
+            task="multiclass", num_classes=self.n_concept#, average="weighted"
+        )
+        
+        self.loss = CrossEntropyLoss(module_config["loss_params"])
+        self.acc_target = self.acc
+        self.f1_target = self.f1
+        self.ck_target = self.ck
+        self.pr_target = self.pr
+        self.rc_target = self.rc
+        
+
+    
 
     def training_step(self, batch, batch_idx):
         if(self.training_type == "end_to_end"):
@@ -140,37 +205,28 @@ class SeqSleepNetCEM(SeqtoSeq):
             
             return optimizer_cem, optimizer
     
-    def log_function (self, log, log_metrics, loss_concept , loss_target, activations, outputs, act_targets, targets):
-        self.log(f"{log}_loss_target", loss_target, prog_bar=True)
-        self.log(f"{log}_loss_concept", loss_concept, prog_bar=True)
-        self.log(f"{log}_acc", self.acc_target(outputs, targets))
-        self.log(f"{log}_acc_concept", self.acc_concept(activations, act_targets))
-        self.log(f"{log}_f1", self.f1_target(outputs, targets))
-        self.log(f"{log}_f1_concept", self.f1_concept(activations, act_targets))
-
-        if log_metrics:
-            self.log(f"{log}_loss_target", loss_target, prog_bar=True)
-            self.log(f"{log}_loss_concept", loss_concept, prog_bar=True)
-            self.log(f"{log}_ck", self.ck_target(outputs, targets))
-            self.log(f"{log}_pr", self.pr_target(outputs, targets))
-            self.log(f"{log}_pr_concept", self.pr_concept(activations, act_targets))
-            self.log(f"{log}_rc", self.rc_target(outputs, targets))
-            self.log(f"{log}_rc_concept", self.rc_concept(activations, act_targets))        
+    
+            # self.log(f"{log}_ck", self.ck_target(outputs, targets))
+            # self.log(f"{log}_pr", self.pr_target(outputs, targets))
+            # self.log(f"{log}_pr_concept", self.pr_concept(activations, act_targets))
+            # self.log(f"{log}_rc", self.rc_target(outputs, targets))
+            # self.log(f"{log}_rc_concept", self.rc_concept(activations, act_targets))   
+                 
 
 class SequenceEncoderCEM(SequenceEncoder):
     def __init__(self, module_config):
         super(SequenceEncoderCEM, self).__init__(module_config)
         self.concept_dim = module_config["concept_dim"]
-        self.latent_dim = module_config["latent_space_dim"]
+        self.cem_input_dim = module_config["seqnhidden2"] * 2
         self.n_classes = module_config["n_classes"]
         self.n_concept = module_config["n_concept"]
-        self.cem = CEM(self.latent_dim, self.n_concept, self.concept_dim)
-        self.cls = nn.Linear(self.n_concept * self.concept_dim, self.n_classes)
+        self.cem = CEM(self.cem_input_dim, self.n_concept, self.concept_dim)
+        self.clf = nn.Linear(self.n_concept * self.concept_dim, self.n_classes)
     
 
     def forward(self, x):
         x, _ = self.encode(x)
-        x = self.cls(x)
+        x = self.clf(x)
         return x
 
     def encode(self, x):
