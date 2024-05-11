@@ -43,13 +43,11 @@ class Dreem(PhysioExDataset):
 
         self.subjects = self.table["subject_id"].values.astype(int)
 
-        self.subject_start_indices, self.subject_end_indices = create_subject_index_map(
+        self.window_to_subject, self.subject_to_start = create_subject_index_map(
             self.table, sequence_length
         )
 
-        self.split_path = (
-            str(Path.home()) + f"/dreem/{preprocessing}/{version}/scaling.npz"
-        )
+        self.split_path = None
         self.data_path = str(Path.home()) + f"/dreem/{preprocessing}/{version}/"
 
         self.picks = picks
@@ -64,7 +62,9 @@ class Dreem(PhysioExDataset):
 
         self.input_shape = self.config["shape_" + preprocessing]
 
-        scaling_file = np.load(self.split_path)
+        scaling_file = np.load(
+            str(Path.home()) + f"/dreem/{preprocessing}/{version}/scaling.npz"
+        )
 
         EEG_mean, EOG_mean, EMG_mean = scaling_file["mean"]
         EEG_std, EOG_std, EMG_std = scaling_file["std"]
