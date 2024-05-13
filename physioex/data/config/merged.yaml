@@ -1,2 +1,2 @@
-datasets_to_merge: ["sleep_physionet","dreem"]
-versions: {"dreem": "dodh", "sleep_physionet": "2018"}
+datasets_to_merge: ["sleep_physionet", "dreem"]
+versions_to_merge: {"dreem": "dodh", "sleep_physionet": "2018"}
