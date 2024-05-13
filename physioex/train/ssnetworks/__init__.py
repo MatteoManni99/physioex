@@ -17,7 +17,7 @@ config = {
     "base_ae": {
         "module_config": read_config("base_ae"),
         "module": BaseAutoEncoder,
-        "input_transform": "xsleepnet",
+        "input_transform": "raw",
         #"target_transform": None,
     },
 }

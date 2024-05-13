@@ -64,8 +64,8 @@ class BaseAutoEncoder(pl.LightningModule):
         return self.decoder(z)
     
     def forward(self, x):
-        print(x.shape)
         z = self.encode(x)
+        print(z.shape)
         x_hat = self.decode(z)
         return x_hat
 

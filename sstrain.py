@@ -55,7 +55,7 @@ def main():
     # sequence
     parser.add_argument(
         "-sl",
-        "--sequence_lenght",
+        "--sequence_length",
         default=1,
         type=int,
         help="Specify the sequence length for the model. Expected type: int. Default: 3",
@@ -109,7 +109,7 @@ def main():
         #loss_name=args.loss,
         version=args.version,
         picks=args.picks,
-        sequence_lenght=args.sequence_lenght,
+        sequence_length=args.sequence_length,
         max_epoch=args.max_epoch,
         val_check_interval=args.val_check_interval,
         batch_size=args.batch_size,
