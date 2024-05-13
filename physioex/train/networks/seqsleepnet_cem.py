@@ -104,13 +104,11 @@ class Net(nn.Module):
 
         x = x.reshape(batch, L, -1)
 
-        x = self.sequence_encoder_cem.encode(x)
+        embeddings, activations = self.sequence_encoder_cem.encode(x)
 
-        x = self.sequence_encoder_cem(x)
+        y = self.sequence_encoder_cem.clf(embeddings)
 
-        y = self.sequence_encoder_cem.clf(x)
-
-        return x, y
+        return (embeddings, activations), y
 
     def forward(self, x):
         x, y = self.encode(x)
