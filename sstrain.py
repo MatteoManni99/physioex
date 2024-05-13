@@ -21,13 +21,13 @@ def main():
         type=str,
         help="Specify where to save the checkpoint. Expected type: str. Default: None",
     )
-    parser.add_argument(
-        "-l",
-        "--loss",
-        default="cel",
-        type=str,
-        help='Specify the loss function to use. Expected type: str. Default: "cel" (Cross Entropy Loss)',
-    )
+    # parser.add_argument(
+    #     "-l",
+    #     "--loss",
+    #     default="cel",
+    #     type=str,
+    #     help='Specify the loss function to use. Expected type: str. Default: "cel" (Cross Entropy Loss)',
+    # )
 
     # dataset args
     parser.add_argument(
@@ -45,11 +45,11 @@ def main():
         help='Specify the version of the dataset. Expected type: str. Default: "2018"',
     )
     parser.add_argument(
-        "-c",
-        "--use_cache",
-        default=True,
-        type=bool,
-        help="Specify whether to use cache for the dataset. Expected type: bool. Default: True",
+        "-p",
+        "--picks",
+        default="Fpz-Cz",
+        type=str,
+        help="Specify the signal electrodes to pick to train the model. Expected type: list. Default: 'Fpz-Cz'",
     )
 
     # sequence
@@ -108,7 +108,7 @@ def main():
         ckp_path=args.checkpoint,
         #loss_name=args.loss,
         version=args.version,
-        use_cache=args.use_cache,
+        picks=args.picks,
         sequence_lenght=args.sequence_lenght,
         max_epoch=args.max_epoch,
         val_check_interval=args.val_check_interval,

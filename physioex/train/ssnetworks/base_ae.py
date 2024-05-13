@@ -53,7 +53,6 @@ class BaseAutoEncoder(pl.LightningModule):
     ):
         super().__init__()
         self.loss_function = nn.MSELoss(reduction="mean")
-        config["input_dim"] = 3000
         self.encoder = Encoder(config)
         self.decoder = Decoder(config)
         self.save_hyperparameters()

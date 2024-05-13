@@ -10,10 +10,8 @@ from pytorch_lightning.callbacks import ModelCheckpoint, RichProgressBar
 
 from physioex.data import TimeDistributedModule, datasets
 from physioex.train.ssnetworks import config
+#from physioex.train.networks.utils.loss import config as loss_config
 
-folds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-
-from ast import literal_eval
 
 import torch
 from loguru import logger
@@ -26,32 +24,31 @@ class SelfSupervisedTrainer:
         self,
         model_name: str = "base_ae",
         dataset_name: str = "sleep_physioex",
+        version: str = "2018",
+        sequence_length: int = 1,
+        picks: list = ["Fpz-Cz"],
         #loss_name: str = "cel",
         ckp_path: str = None,
-        version: str = "2018",
-        use_cache: bool = True,
-        sequence_lenght: int = 1,
         max_epoch: int = 20,
         val_check_interval: int = 300,
         batch_size: int = 32,
         n_jobs: int = 10,
+        #imbalance: bool = False,
     ):
 
         seed_everything(42, workers=True)
 
         self.dataset_call = datasets[dataset_name]
-
         self.model_call = config[model_name]["module"]
         self.input_transform = config[model_name]["input_transform"]
         #self.target_transform = config[model_name]["target_transform"]
         self.module_config = config[model_name]["module_config"]
-        self.module_config["seq_len"] = sequence_lenght
+        self.module_config["seq_len"] = sequence_length
 
         self.batch_size = batch_size
         self.max_epoch = max_epoch
         self.val_check_interval = val_check_interval
         self.version = version
-        self.use_cache = use_cache
         self.n_jobs = n_jobs
 
         if ckp_path is None:
@@ -61,10 +58,24 @@ class SelfSupervisedTrainer:
 
         Path(self.ckp_path).mkdir(parents=True, exist_ok=True)
 
+        picks = picks.split(" ")
+        self.module_config["picks"] = picks
+
         logger.info("Loading dataset")
-        self.dataset = self.dataset_call(version=self.version, use_cache=self.use_cache)
+        self.dataset = self.dataset_call(
+            version=self.version,
+            picks=picks,
+            preprocessing=self.input_transform,
+            sequence_length=sequence_length,
+            target_transform=None,
+        )
+
         logger.info("Dataset loaded")
 
+        self.folds = list(range(self.dataset.get_num_folds()))
+
+        #self.module_config["loss_call"] = loss_config[loss_name]
+        #self.module_config["loss_params"] = dict()
 
     def train_evaluate(self, fold: int = 0):
 
@@ -77,10 +88,8 @@ class SelfSupervisedTrainer:
 
         datamodule = TimeDistributedModule(
             dataset=dataset,
-            sequence_lenght=self.module_config["seq_len"],
             batch_size=self.batch_size,
-            transform=self.input_transform,
-            #target_transform=self.target_transform,
+            fold=fold,
         )
 
         module = self.model_call(config=self.module_config)
@@ -121,7 +130,7 @@ class SelfSupervisedTrainer:
         logger.info("Jobs pool spawning")
 
         results = Parallel(n_jobs=self.n_jobs)(
-            delayed(self.train_evaluate)(fold) for fold in folds
+            delayed(self.train_evaluate)(fold) for fold in self.folds
         )
 
         # results = []
