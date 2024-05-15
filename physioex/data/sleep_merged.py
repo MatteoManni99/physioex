@@ -35,7 +35,7 @@ equivalent_picks.update({"shhs_EEG": "EEG", "shhs_EOG": "EOG", "shhs_EMG": "EMG"
 datasets_to_merge = ["sleep_physionet", "dreem"]
 versions_to_merge = {"dreem": "dodh", "sleep_physionet": "2018"}
 
-class Merged(PhysioExDataset):
+class SleepMerged(PhysioExDataset):
     def __init__(
         self,
         version: str = None,
@@ -101,17 +101,3 @@ class Merged(PhysioExDataset):
             i+=1
 
         return np.concatenate(total_train_idx), np.concatenate(total_valid_idx), np.concatenate(total_test_idx)
-
-
-# @logger.catch
-# def read_config():
-#     config_file = pkg.resource_filename(__name__, "config/merged.yaml")
-
-#     with open(config_file, "r") as file:
-#         config = yaml.safe_load(file)
-
-#     return config
-
-
-# if __name__ == "__main__":
-#     Merged()
