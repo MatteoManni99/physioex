@@ -50,4 +50,5 @@ class CrossEntropyLoss(nn.Module, PhysioExLoss):
 config = {
     "cel": CrossEntropyLoss,
     "scl": SimilarityCombinedLoss,
+    "mse": nn.MSELoss,
 }

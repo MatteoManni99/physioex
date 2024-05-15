@@ -9,8 +9,8 @@ from lightning.pytorch import seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint, RichProgressBar
 
 from physioex.data import TimeDistributedModule, datasets
-from physioex.train.ssnetworks import config
-#from physioex.train.networks.utils.loss import config as loss_config
+from physioex.train.networks import config
+from physioex.train.networks.utils.loss import config as loss_config
 
 
 import torch
@@ -22,12 +22,12 @@ torch.set_float32_matmul_precision("medium")
 class SelfSupervisedTrainer:
     def __init__(
         self,
-        model_name: str = "base_ae",
+        model_name: str = "ae_fullyconnected",
         dataset_name: str = "sleep_physioex",
         version: str = "2018",
         sequence_length: int = 1,
         picks: list = ["Fpz-Cz"],
-        #loss_name: str = "cel",
+        loss_name: str = "mse",
         ckp_path: str = None,
         max_epoch: int = 20,
         val_check_interval: int = 300,
@@ -74,7 +74,7 @@ class SelfSupervisedTrainer:
 
         self.folds = list(range(self.dataset.get_num_folds()))
 
-        #self.module_config["loss_call"] = loss_config[loss_name]
+        self.module_config["loss_call"] = loss_config[loss_name]
         #self.module_config["loss_params"] = dict()
 
     def train_evaluate(self, fold: int = 0):
@@ -92,7 +92,7 @@ class SelfSupervisedTrainer:
             fold=fold,
         )
 
-        module = self.model_call(config=self.module_config)
+        module = self.model_call(module_config=self.module_config)
 
         # Definizione delle callback
         

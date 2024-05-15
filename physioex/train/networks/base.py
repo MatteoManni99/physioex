@@ -117,3 +117,77 @@ class SleepModule(pl.LightningModule):
         embeddings, outputs = self.encode(inputs)
 
         return self.compute_loss(embeddings, outputs, targets, "test", log_metrics=True)
+
+####################################################################################################
+
+class SleepAutoEncoderModule(pl.LightningModule):
+    def __init__(self, nn: nn.Module, config: Dict):
+        super(SleepAutoEncoderModule, self).__init__()
+        self.nn = nn
+        
+        self.loss = config["loss_call"]()
+
+        self.module_config = config
+
+
+    def forward(self, x):
+        return self.nn(x)
+
+    def encode(self, x):
+        return self.nn.encode(x)
+    
+    def decode(self, z):
+        return self.nn.decode(z)
+
+    def compute_loss(
+        self,
+        inputs,
+        input_hat,
+        log: str = "train",
+    ):
+        loss = self.loss(inputs, input_hat)
+        self.log(f"{log}_loss", loss, prog_bar=True)
+        return loss
+    
+    def training_step(self, batch, batch_idx):
+        # Logica di training
+        x, _ = batch
+        x_hat = self.forward(x)
+        return self.compute_loss(x, x_hat)
+
+    def validation_step(self, batch, batch_idx):
+        # Logica di validazione
+        x, _ = batch
+        x_hat = self.forward(x)
+        return self.compute_loss(x, x_hat, log="val")
+
+    def test_step(self, batch, batch_idx):
+        # Logica di training
+        x, _ = batch
+        x_hat = self.forward(x)
+        return self.compute_loss(x, x_hat, log="test")
+    
+    def configure_optimizers(self):
+        self.opt = optim.Adam(
+            self.nn.parameters(),
+            lr=1e-4,
+            weight_decay=1e-3,
+        )
+
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            self.opt,
+            mode="max",
+            factor=0.5,
+            patience=10,
+            threshold=0.0001,
+            threshold_mode="rel",
+            cooldown=0,
+            min_lr=0,
+            eps=1e-08,
+            verbose=True,
+        )
+
+        return {
+            "optimizer": self.opt,
+            "lr_scheduler": {"scheduler": self.scheduler, "monitor": "val_acc"},
+        }
