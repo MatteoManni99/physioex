@@ -17,23 +17,27 @@ class AutoEncoderFullyConnected(SleepAutoEncoderModule):
 class Net(nn.Module):
     def __init__(self, module_config=module_config):
         super().__init__()
+        self.seq_len = module_config["seq_len"]
+        self.in_channels = module_config["in_channels"]
+        self.T = module_config["T"]
+        self.F = module_config["F"]
         self.encoder = Encoder(module_config)
         self.decoder = Decoder(module_config)
 
     def forward(self, x):
-        print (x.shape)
+        x = x.reshape(-1, self.seq_len * self.in_channels * self.T * self.F)
         x = self.encoder(x)
         x = self.decoder(x)
-        return x
+        return x.reshape(-1, self.seq_len, self.in_channels, self.T, self.F)
 
 class Encoder(nn.Module):
     def __init__(self, config: Dict):
         super().__init__()
         self.act_fn = nn.ReLU()
-        self.input_dim = config["input_dim"]
+        self.input_dim = config["seq_len"] * config["in_channels"] * config["T"] * config["F"]
         self.output_dim = config["latent_dim"]
-        self.n_hlayers = config["n_encoder_hlayers"]
-        self.hlayer_sizes = config["encoder_hlayer_sizes"]
+        self.n_hlayers = 3
+        self.hlayer_sizes = [128, 128, 128]
 
         layers = [nn.Linear(self.input_dim, self.hlayer_sizes[0]), self.act_fn]
         for i in range(self.n_hlayers-1):
@@ -50,9 +54,9 @@ class Decoder(nn.Module):
         super().__init__()
         self.act_fn = nn.ReLU()
         self.input_dim = config["latent_dim"]
-        self.output_dim = config["input_dim"]
-        self.n_hlayers = config["n_decoder_hlayers"]
-        self.hlayer_sizes = config["decoder_hlayer_sizes"]
+        self.output_dim = config["seq_len"] * config["in_channels"] * config["T"] * config["F"]
+        self.n_hlayers = 3
+        self.hlayer_sizes = [128, 128, 128]
 
         layers = [nn.Linear(self.input_dim, self.hlayer_sizes[0]), self.act_fn]
         for i in range(self.n_hlayers-1):

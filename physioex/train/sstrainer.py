@@ -60,7 +60,8 @@ class SelfSupervisedTrainer:
 
         picks = picks.split(" ")
         self.module_config["picks"] = picks
-
+        self.module_config["in_channels"] = len(picks)
+        
         logger.info("Loading dataset")
         self.dataset = self.dataset_call(
             version=self.version,

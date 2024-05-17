@@ -1,12 +1,13 @@
-latent_dim: 16
-input_dim: 3000
+latent_dim: 32
+
+T: 29
+F: 129
+#D: 32
 
 # Encoder
 n_encoder_hlayers: 3
 encoder_hlayer_sizes: [128, 128, 128]
-encoder_act_fun: leakyrelu
 
 # Decoder
 n_decoder_hlayers: 3
 decoder_hlayer_sizes: [128, 128, 128]
-decoder_act_fun: leakyrelu
