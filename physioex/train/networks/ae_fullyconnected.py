@@ -25,10 +25,10 @@ class Net(nn.Module):
         self.decoder = Decoder(module_config)
 
     def forward(self, x):
-        x = x.reshape(-1, self.seq_len * self.in_channels * self.T * self.F)
+        x = x.view(-1, self.seq_len * self.in_channels * self.T * self.F)
         x = self.encoder(x)
         x = self.decoder(x)
-        return x.reshape(-1, self.seq_len, self.in_channels, self.T, self.F)
+        return x.view(-1, self.seq_len, self.in_channels, self.T, self.F)
 
 class Encoder(nn.Module):
     def __init__(self, config: Dict):
@@ -37,7 +37,7 @@ class Encoder(nn.Module):
         self.input_dim = config["seq_len"] * config["in_channels"] * config["T"] * config["F"]
         self.output_dim = config["latent_dim"]
         self.n_hlayers = 3
-        self.hlayer_sizes = [128, 128, 128]
+        self.hlayer_sizes = [1024, 128, 128]
 
         layers = [nn.Linear(self.input_dim, self.hlayer_sizes[0]), self.act_fn]
         for i in range(self.n_hlayers-1):
@@ -56,7 +56,7 @@ class Decoder(nn.Module):
         self.input_dim = config["latent_dim"]
         self.output_dim = config["seq_len"] * config["in_channels"] * config["T"] * config["F"]
         self.n_hlayers = 3
-        self.hlayer_sizes = [128, 128, 128]
+        self.hlayer_sizes = [128, 128, 1024]
 
         layers = [nn.Linear(self.input_dim, self.hlayer_sizes[0]), self.act_fn]
         for i in range(self.n_hlayers-1):

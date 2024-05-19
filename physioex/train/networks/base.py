@@ -189,5 +189,5 @@ class SleepAutoEncoderModule(pl.LightningModule):
 
         return {
             "optimizer": self.opt,
-            "lr_scheduler": {"scheduler": self.scheduler, "monitor": "val_acc"},
+            "lr_scheduler": {"scheduler": self.scheduler, "monitor": "val_loss"},
         }
