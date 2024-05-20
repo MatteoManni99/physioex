@@ -133,11 +133,11 @@ class SleepAutoEncoderModule(pl.LightningModule):
     def forward(self, x):
         return self.nn(x)
 
-    def encode(self, x):
-        return self.nn.encode(x)
+    # def encode(self, x):
+    #     return self.nn.encode(x)
     
-    def decode(self, z):
-        return self.nn.decode(z)
+    # def decode(self, z):
+    #     return self.nn.decode(z)
 
     def compute_loss(
         self,

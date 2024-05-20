@@ -9,6 +9,13 @@ from physioex.train.networks.base import SleepAutoEncoderModule
 
 module_config = dict()
 
+def get_layer_list(input_dim, output_dim, n_hlayers, hlayer_sizes):
+    layers = [nn.Linear(input_dim, hlayer_sizes[0]), nn.Tanh()]
+    for i in range(n_hlayers-1):
+        layers.extend([nn.Linear(hlayer_sizes[i], hlayer_sizes[i+1]), nn.Tanh()])
+    layers.append(nn.Linear(hlayer_sizes[-1], output_dim))
+
+    return layers
 
 class AutoEncoderFullyConnected(SleepAutoEncoderModule):
     def __init__(self, module_config=module_config):
@@ -17,56 +24,84 @@ class AutoEncoderFullyConnected(SleepAutoEncoderModule):
 class Net(nn.Module):
     def __init__(self, module_config=module_config):
         super().__init__()
-        self.seq_len = module_config["seq_len"]
-        self.in_channels = module_config["in_channels"]
-        self.T = module_config["T"]
-        self.F = module_config["F"]
         self.encoder = Encoder(module_config)
         self.decoder = Decoder(module_config)
 
     def forward(self, x):
-        x = x.view(-1, self.seq_len * self.in_channels * self.T * self.F)
         x = self.encoder(x)
         x = self.decoder(x)
-        return x.view(-1, self.seq_len, self.in_channels, self.T, self.F)
+        return x
 
 class Encoder(nn.Module):
     def __init__(self, config: Dict):
         super().__init__()
-        self.act_fn = nn.ReLU()
-        self.input_dim = config["seq_len"] * config["in_channels"] * config["T"] * config["F"]
+        self.L = config["seq_len"]
+        self.nchan = config["in_channels"]
+        self.T = config["T"]
+        self.F = config["F"]
+        self.input_dim = self.nchan * self.T * self.F
+        self.epoch_encode_dim = config["epoch_encode_dim"]
         self.output_dim = config["latent_dim"]
-        self.n_hlayers = 3
-        self.hlayer_sizes = [1024, 128, 128]
 
-        layers = [nn.Linear(self.input_dim, self.hlayer_sizes[0]), self.act_fn]
-        for i in range(self.n_hlayers-1):
-            layers.extend([nn.Linear(self.hlayer_sizes[i], self.hlayer_sizes[i+1]), self.act_fn])
-        layers.append(nn.Linear(self.hlayer_sizes[-1], self.output_dim))
-
-        self.net = nn.Sequential(*layers)
+        self.epoch_encoder = nn.Sequential(*get_layer_list(self.input_dim, self.epoch_encode_dim,
+                                                           #3, [512, 256, 128]))
+                                                           1, [128]))
+        
+        self.sequence_encoder = nn.Sequential(*get_layer_list(self.epoch_encode_dim * self.L, self.output_dim * self.L,
+                                                              #3, [128, 64, 32]))
+                                                                1, [128]))
+        self.lin_encode = nn.Linear(self.output_dim, self.output_dim)
 
     def forward(self, x):
-        return self.net(x)
+        #print("Encoder input shape: ", x.shape)
+        x = x.view(-1, self.nchan * self.T * self.F)
+        #print("Encoder reshaped input shape: ", x.shape)
+        x = self.epoch_encoder(x)
+        #print("Encoder epoch encoded shape: ", x.shape)
+        x = x.view(-1, self.L * self.epoch_encode_dim)
+        #print("Encoder reshaped epoch encoded shape: ", x.shape)
+        x = self.sequence_encoder(x)
+        #print("Encoder sequence encoded shape: ", x.shape)
+        x = x.view(-1, self.L, self.output_dim)
+        #print("Encoder reshaped sequence encoded shape: ", x.shape)
+        x = self.lin_encode(x)
+        #print("Encoder lin_encode shape: ", x.shape)
+        return x
 
 class Decoder(nn.Module):
     def __init__(self, config: Dict):
         super().__init__()
-        self.act_fn = nn.ReLU()
+        self.L = config["seq_len"]
+        self.nchan = config["in_channels"]
+        self.T = config["T"]
+        self.F = config["F"]
         self.input_dim = config["latent_dim"]
-        self.output_dim = config["seq_len"] * config["in_channels"] * config["T"] * config["F"]
-        self.n_hlayers = 3
-        self.hlayer_sizes = [128, 128, 1024]
+        self.epoch_encode_dim = config["epoch_encode_dim"]
+        self.output_dim = self.nchan * self.T * self.F
 
-        layers = [nn.Linear(self.input_dim, self.hlayer_sizes[0]), self.act_fn]
-        for i in range(self.n_hlayers-1):
-            layers.extend([nn.Linear(self.hlayer_sizes[i], self.hlayer_sizes[i+1]), self.act_fn])
-        layers.append(nn.Linear(self.hlayer_sizes[-1], self.output_dim))
-
-        self.net = nn.Sequential(*layers)
+        self.sequence_decoder = nn.Sequential(*get_layer_list(self.input_dim * self.L, self.epoch_encode_dim * self.L,
+                                                          #3, [32, 64, 128]))
+                                                            1, [128]))
+        
+        self.epoch_decoder = nn.Sequential(*get_layer_list(self.epoch_encode_dim, self.output_dim,
+                                                          #3, [128, 256, 512]))
+                                                          1, [128]))
+        
+        self.lin_decode = nn.Linear(self.input_dim, self.input_dim)
 
     def forward(self, x):
-        x = self.net(x)
+        x = self.lin_decode(x)
+        #print("Decoder lin_decode shape: ", x.shape)
+        x = x.view(-1, self.L * self.input_dim)
+        #print("Decoder reshaped lin_decode shape: ", x.shape)
+        x = self.sequence_decoder(x)
+        #print("Decoder sequence decoded shape: ", x.shape)
+        x = x.view(-1, self.epoch_encode_dim)
+        #print("Decoder reshaped sequence decoded shape: ", x.shape)
+        x = self.epoch_decoder(x)
+        #print("Decoder epoch decoded shape: ", x.shape)
+        x = x.view(-1, self.L, self.nchan, self.T, self.F)
+        #print("Decoder reshaped epoch decoded shape: ", x.shape)
         return x
 
     
