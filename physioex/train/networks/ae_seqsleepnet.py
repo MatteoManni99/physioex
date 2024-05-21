@@ -141,9 +141,9 @@ class TransposeConvNet(nn.Module):
     def forward(self, x):
         x = x.view(-1, self.input_dim, 1, 1) # Reshape to match the input of ConvTranspose2d
         x = self.conv_transpose1(x)
-        #x = nn.LeakyReLU(x)
+        x = nn.Tanh()(x)
         x = self.conv_transpose2(x)
-        #x = nn.LeakyReLU(x)
+        x = nn.Tanh()(x)
         x = self.conv_transpose3(x)
         return x
     

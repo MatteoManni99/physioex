@@ -32,8 +32,8 @@ equivalent_picks = {"dreem_EEG": "C3-M2", "dreem_EOG": "EOG", "dreem_EMG": "EMG"
 equivalent_picks.update({"sleep_physionet_EEG": "Fpz-Cz", "sleep_physionet_EOG": "EOG", "sleep_physionet_EMG": "EMG"})
 equivalent_picks.update({"shhs_EEG": "EEG", "shhs_EOG": "EOG", "shhs_EMG": "EMG"})
 
-datasets_to_merge = ["sleep_physionet", "dreem"]
-versions_to_merge = {"dreem": "dodh", "sleep_physionet": "2018"}
+datasets_to_merge = ["sleep_physionet", "dreem", "dreem"]
+versions_to_merge = [ "2018", "dodh", "dodo"]
 
 class SleepMerged(PhysioExDataset):
     def __init__(
@@ -49,10 +49,10 @@ class SleepMerged(PhysioExDataset):
         self.datasets = []
         self.offsets = []
         #TODO implement the possibility to use more then one pick
-        for dataset_name in datasets_to_merge:
+        for idx, dataset_name in enumerate(datasets_to_merge):
             self.datasets.append(
                 dataset_class[dataset_name](
-                    version=versions_to_merge[dataset_name],
+                    version=versions_to_merge[idx],
                     picks=[equivalent_picks[dataset_name + "_" + picks[0]]],
                     preprocessing=preprocessing,
                     sequence_length=sequence_length,
