@@ -1,18 +1,13 @@
+from typing import Callable, List
+
 import numpy as np
+import pandas as pd
 import pytorch_lightning as pl
 import torch
-
 from torch.utils.data import DataLoader, SubsetRandomSampler
 
+from physioex.data.constant import get_data_folder
 from physioex.data.utils import read_config
-
-from pathlib import Path
-
-from typing import List, Callable
-
-import pandas as pd
-
-import bisect
 
 
 def transform_to_sequence(x, y, sequence_length):
@@ -70,7 +65,7 @@ class PhysioExDataset(torch.utils.data.Dataset):
 
         self.subjects = self.config["subjects_v" + version]
 
-        self.table = pd.read_csv(str(Path.home()) + self.config["table"])
+        self.table = pd.read_csv(get_data_folder() + self.config["table"])
 
         # drop from the table the rows with subject_id not in self.subjects
         self.table = self.table[self.table["subject_id"].isin(self.subjects)]
@@ -79,8 +74,8 @@ class PhysioExDataset(torch.utils.data.Dataset):
             self.table, sequence_length
         )
 
-        self.split_path = str(Path.home()) + self.config["splits_v" + version]
-        self.data_path = str(Path.home()) + self.config[preprocessing + "_path"]
+        self.split_path = get_data_folder() + self.config["splits_v" + version]
+        self.data_path = get_data_folder() + self.config[preprocessing + "_path"]
 
         self.picks = picks
         self.version = version
@@ -95,7 +90,7 @@ class PhysioExDataset(torch.utils.data.Dataset):
         self.input_shape = self.config["shape_" + preprocessing]
 
     def __len__(self):
-        return np.sum(self.table["num_samples"] - self.L + 1)
+        return int(np.sum(self.table["num_samples"] - self.L + 1))
 
     def __getitem__(self, idx):
         subject_id, relative_id = find_subject_for_window(
@@ -176,14 +171,12 @@ class TimeDistributedModule(pl.LightningDataModule):
         self,
         dataset: PhysioExDataset,
         batch_size: int = 32,
-        chunk_size: int = 256,
         fold: int = 0,
         num_workers: int = 32,
     ):
         super().__init__()
         self.dataset = dataset
         self.batch_size = batch_size
-        self.chunk_size = chunk_size
 
         self.dataset.split(fold)
 
@@ -215,5 +208,22 @@ class TimeDistributedModule(pl.LightningDataModule):
             self.dataset,
             batch_size=self.batch_size,
             sampler=SubsetRandomSampler(self.test_idx),
+            num_workers=self.num_workers,
+        )
+
+
+class CombinedTimeDistributedModule(TimeDistributedModule):
+    def __init__(
+        self,
+        dataset: PhysioExDataset,
+        batch_size: int = 32,
+        num_workers: int = 32,
+    ):
+        super().__init__(dataset, batch_size, 0, num_workers)
+
+    def test_dataloader(self):
+        return DataLoader(
+            self.dataset,
+            batch_size=self.batch_size,
             num_workers=self.num_workers,
         )

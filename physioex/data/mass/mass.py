@@ -3,51 +3,64 @@ from typing import Callable, List
 
 import h5py
 import numpy as np
+import pandas as pd
 import torch
 from scipy.io import loadmat
 
-from physioex.data.base import PhysioExDataset
+from physioex.data.base import PhysioExDataset, create_subject_index_map
 from physioex.data.constant import get_data_folder
 
 
-class SleepEDF(PhysioExDataset):
+class Mass(PhysioExDataset):
     def __init__(
         self,
-        version: str = "2018",
-        picks: List[str] = ["Fpz-Cz"],  # available [ "Fpz-Cz", "EOG", "EMG" ]
+        version: str = None,
+        picks: List[str] = ["EEG"],  # available [ "EEG", "EOG", "EMG" ]
         preprocessing: str = "raw",  # available [ "raw", "xsleepnet" ]
         sequence_length: int = 21,
         target_transform: Callable = None,
     ):
-
-        assert version in ["2018", "2013"], "version should be one of '2013'-'2018'"
         assert preprocessing in [
             "raw",
             "xsleepnet",
         ], "preprocessing should be one of 'raw'-'xsleepnet'"
         for pick in picks:
             assert pick in [
-                "Fpz-Cz",
+                "EEG",
                 "EOG",
                 "EMG",
-            ], "pick should be one of 'C3-M3', 'EOG', 'EMG'"
+            ], "pick should be one of 'EEG, 'EOG', 'EMG'"
 
-        super().__init__(
-            version,
-            picks,
-            preprocessing,
-            "config/sleep-edf.yaml",
-            sequence_length,
-            target_transform,
+        self.table = pd.read_csv(get_data_folder() + "/mass/table.csv")
+        self.table = self.table[self.table["modality"] == "EEG"]
+        self.table = self.table.drop(columns=["modality"])
+
+        self.subjects = self.table["subject_id"].values.astype(np.int16)
+
+        self.window_to_subject, self.subject_to_start = create_subject_index_map(
+            self.table, sequence_length
         )
 
-        scaling_file = np.load(
-            get_data_folder()
-            + self.config[self.preprocessing + "_path"]
-            + "scaling_"
-            + self.version
-            + ".npz"
-        )
+        self.split_path = get_data_folder() + f"/mass/data_split_eval.mat"
+
+        self.data_path = get_data_folder() + f"/mass/{preprocessing}/"
+
+        self.picks = picks
+        self.version = version
+        self.preprocessing = preprocessing
+
+        self.mean = None
+        self.std = None
+
+        self.L = sequence_length
+        self.target_transform = target_transform
+
+        if self.preprocessing == "raw":
+            self.input_shape = [3000]
+        else:
+            self.input_shape = [29, 129]
+
+        scaling_file = np.load(get_data_folder() + f"/mass/{preprocessing}/scaling.npz")
 
         EEG_mean, EOG_mean, EMG_mean = scaling_file["mean"]
         EEG_std, EOG_std, EMG_std = scaling_file["std"]
@@ -55,7 +68,7 @@ class SleepEDF(PhysioExDataset):
         self.mean = []
         self.std = []
 
-        if "Fpz-Cz" in self.picks:
+        if "EEG" in self.picks:
             self.mean.append(EEG_mean)
             self.std.append(EEG_std)
         if "EOG" in self.picks:
@@ -77,12 +90,16 @@ class SleepEDF(PhysioExDataset):
 
         split_matrix = loadmat(self.split_path)
 
-        test_subjects = split_matrix["test_sub"][fold][0][0]
-        valid_subjects = split_matrix["eval_sub"][fold][0][0]
+        test_subjects = np.array(list(split_matrix["test_sub"][fold][0][0])).astype(
+            np.int16
+        )
+        valid_subjects = np.array(list(split_matrix["eval_sub"][fold][0][0])).astype(
+            np.int16
+        )
 
         # add a column to the table with 0 if the subject is in train, 1 if in valid, 2 if in test
 
-        split = np.zeros(len(self.table))
+        split = np.zeros(len(self.table)).astype(np.int8)
         split[self.table["subject_id"].isin(test_subjects)] = 2
         split[self.table["subject_id"].isin(valid_subjects)] = 1
 
@@ -90,6 +107,7 @@ class SleepEDF(PhysioExDataset):
 
     def __getitem__(self, idx):
         x, y = super().__getitem__(idx)
+        y = y - 1
 
         x = (x - self.mean) / self.std
 

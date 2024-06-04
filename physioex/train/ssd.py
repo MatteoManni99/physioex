@@ -1,20 +1,20 @@
 import copy
+import json
 import uuid
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
+import torch
 from joblib import Parallel, delayed
 from lightning.pytorch import seed_everything
+from loguru import logger
 from pytorch_lightning.callbacks import ModelCheckpoint, RichProgressBar
 
-from physioex.data import TimeDistributedModule, datasets
+from physioex.data import CombinedTimeDistributedModule, TimeDistributedModule, datasets
 from physioex.train.networks import config
 from physioex.train.networks.utils.loss import config as loss_config
-
-
-import torch
-from loguru import logger
 
 torch.set_float32_matmul_precision("medium")
 
@@ -27,7 +27,13 @@ train_domain = {
     "sequence_length": 21,
 }
 
-target_domain = target_domain = [
+target_domain = [
+    {
+        "name": "mass",
+        "version": None,
+        "picks": ["EEG"],
+        "sequence_length": 21,
+    },
     {
         "name": "dreem",
         "version": "dodh",
@@ -54,12 +60,13 @@ target_domain = target_domain = [
     },
 ]
 
-ckp_path = "models/ssd/" + str(uuid.uuid4()) + "/"
-max_epoch = 1
-batch_size = 512
+ckp_path = "models/ssd/pretrained/"
+
+max_epoch = 100
+batch_size = 256
 imbalance = False
 
-val_check_interval = 1000
+val_check_interval = 300
 
 
 class SingleSourceDomain:
@@ -130,40 +137,69 @@ class SingleSourceDomain:
         )
 
         module = self.model_call(module_config=self.module_config)
-
-        checkpoint_callback = ModelCheckpoint(
-            monitor="val_acc",
-            save_top_k=1,
-            mode="max",
-            dirpath=self.ckp_path,
-            filename="fold=%d-{epoch}-{step}-{val_acc:.2f}" % fold,
-        )
-
         progress_bar_callback = RichProgressBar()
 
-        logger.info("Trainer setup")
-        # Configura il trainer con le callback
-        trainer = pl.Trainer(
-            max_epochs=self.max_epoch,
-            val_check_interval=self.val_check_interval,
-            callbacks=[checkpoint_callback, progress_bar_callback],
-            deterministic=True,
-        )
+        # check if the model is already in the ckp_path if not train it
+        Path(self.ckp_path).mkdir(parents=True, exist_ok=True)
+        # get the file inside the folder and check if the model is already there
+        files = list(Path(self.ckp_path).rglob("*.ckpt"))
+        # if the list is empty than there is not model in the folder
 
-        logger.info("Training model")
-        # Addestra il modello utilizzando il trainer e il DataModule
-        trainer.fit(module, datamodule=datamodule)
+        if len(files) == 0:
+            logger.info("Model not found, training")
+
+            self.ckp_path = "models/ssd/" + str(uuid.uuid4()) + "/"
+
+            checkpoint_callback = ModelCheckpoint(
+                monitor="val_acc",
+                save_top_k=1,
+                mode="max",
+                dirpath=self.ckp_path,
+                filename="fold=%d-{epoch}-{step}-{val_acc:.2f}" % fold,
+            )
+
+            logger.info("Trainer setup")
+            # Configura il trainer con le callback
+            trainer = pl.Trainer(
+                max_epochs=self.max_epoch,
+                val_check_interval=self.val_check_interval,
+                callbacks=[checkpoint_callback, progress_bar_callback],
+                deterministic=True,
+            )
+
+            logger.info("Training model")
+            # Addestra il modello utilizzando il trainer e il DataModule
+            trainer.fit(module, datamodule=datamodule)
+
+            # carica il modello migliore
+            module = self.model_call.load_from_checkpoint(
+                str(Path(self.ckp_path).rglob("*.ckpt")[0]),
+                module_config=self.module_config,
+            )
+
+        else:
+            logger.info("Model found, loading")
+
+            module = self.model_call.load_from_checkpoint(
+                str(files[0]), module_config=self.module_config
+            ).eval()
+
+            trainer = pl.Trainer(
+                callbacks=[progress_bar_callback],
+                deterministic=True,
+            )
 
         logger.info("Evaluating model on single source domain")
-        ssd_results = trainer.test(ckpt_path="best", datamodule=datamodule)
+        ssd_results = trainer.test(module, datamodule=datamodule)
 
         logger.info("Evaluating model on target domains")
         target_results = {}
+
         for target_domain in self.target_domain:
 
             target_call = datasets[target_domain["name"]]
             logger.info(
-                f"Loading target dataset {target_call} version {target_domain['version']}"
+                f"Loading target dataset {target_domain['name']} version {target_domain['version']}"
             )
 
             target_args = {
@@ -176,58 +212,60 @@ class SingleSourceDomain:
 
             target_dataset = target_call(**target_args)
 
-            target_folds = list(range(target_dataset.get_num_folds()))
-            target_results[f"{target_call}_{target_domain['version']}"] = {}
+            # check if the key exists in case create it
+            if target_domain["name"] not in target_results:
+                target_results[target_domain["name"]] = {}
 
-            for tf in target_folds:
-                target_dataset.split(fold)
+            if target_domain["version"] not in target_results[target_domain["name"]]:
+                target_results[target_domain["name"]][target_domain["version"]] = {}
 
-                target_datamodule = TimeDistributedModule(
-                    dataset=target_dataset,
-                    batch_size=self.batch_size,
-                    fold=fold,
-                )
+            target_dataset.split(0)
 
-                logger.info("Evaluating model on fold %d" % tf)
+            target_datamodule = CombinedTimeDistributedModule(
+                dataset=target_dataset,
+                batch_size=self.batch_size,
+            )
 
-                target_results[f"{target_call}_{target_domain['version']}"][tf] = (
-                    trainer.test(ckpt_path="best", datamodule=target_datamodule)
-                )
+            logger.info("Evaluating model")
 
-        return {"ssd_results": ssd_results, "msd_resuts": target_results}
+            target_results[target_domain["name"]][target_domain["version"]] = (
+                trainer.test(module, datamodule=target_datamodule)
+            )
+
+        return {"ssd_results": ssd_results, "msd_results": target_results}
 
     def run(self):
-        results = [self.train_evaluate(fold) for fold in self.folds]
-        ssd_results = [result["ssd_results"] for result in results]
-        msd_results = [result["msd_results"] for result in results]
 
-        try:
-            all_test_results = []
-            for i, result in enumerate(ssd_results):
-                test_results = pd.DataFrame(result)
-                test_results["fold"] = i
-                all_test_results.append(test_results)
+        # ssd has only one fold : 0
+        results = self.train_evaluate(0)
 
-            all_test_results_df = pd.concat(all_test_results)
-            all_test_results_df.to_csv(self.ckp_path + "ssd_results.csv", index=False)
+        ssd_results = results["ssd_results"]
+        msd_results = results["msd_results"]
 
-            for target in msd_results[0].keys():
-                all_target_results = []
-                for fold in msd_results[0][target].keys():
-                    target_results = pd.DataFrame(
-                        [result[target][fold] for result in msd_results]
-                    )
-                    target_results["fold"] = fold
-                    all_target_results.append(target_results)
+        pd.DataFrame(ssd_results).to_csv(self.ckp_path + "ssd_results.csv", index=False)
 
-                all_target_results_df = pd.concat(all_target_results)
-                all_target_results_df.to_csv(
-                    self.ckp_path + f"{target}_results.csv", index=False
-                )
+        # save msd_results as a json file
 
-        except Exception as e:
-            logger.error(f"Error while saving results: {e}")
-            raise e
+        with open(self.ckp_path + "msd_results.json", "w") as f:
+            json.dump(msd_results, f)
+
+        # msd results saving
+        targets = list(msd_results.keys())
+
+        target_df = []
+        for target in targets:
+            versions = list(msd_results[target].keys())
+
+            for version in versions:
+
+                results_dict = msd_results[target][version]
+                target_df.append(pd.DataFrame(results_dict))
+                target_df[-1]["version"] = version
+                target_df[-1]["target"] = target
+
+        target_df = pd.concat(target_df)
+
+        target_df.to_csv(self.ckp_path + "msd_results.csv", index=False)
 
         logger.info("Results successfully saved in %s" % self.ckp_path)
 

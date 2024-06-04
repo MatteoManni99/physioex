@@ -10,8 +10,9 @@ setup(
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "train=train:main",
-            "sstrain=sstrain:main",
+            "train=physioex.train.train:main",
+            "preprocess=physioex.data.preprocess:main",
+            "sstrain=physioex.train.sstrain:main",
         ],
     },
 )

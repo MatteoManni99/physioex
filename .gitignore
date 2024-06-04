@@ -5,6 +5,8 @@
 *.py[cod]
 *$py.class
 
+results/
+
 physioex/train/old/
 
 models
@@ -12,6 +14,7 @@ script
 temp 
 lightning_logs
 physioex/data/shhs/download.py
+physioex/data/mass/download.py
 
 # C extensions
 *.so
