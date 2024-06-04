@@ -37,23 +37,24 @@ class Encoder(nn.Module):
 
         self.epoch_encoder = nn.Sequential(
             nn.Conv2d(self.nchan, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),  # Output: 32 x 15 x 65
-            nn.Tanh(),
+            nn.LeakyReLU(),
             nn.Conv2d(32, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),         # Output: 64 x 8 x 33
-            nn.Tanh(),
+            nn.LeakyReLU(),
             nn.Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)),          # Output: 32 x 8 x 33
-            nn.Tanh()
+            nn.LeakyReLU()
         )
 
         self.sequence_encoder = nn.Sequential(
             nn.Conv3d(32, self.output_dim, kernel_size=(3, 5, 17), padding=(1, 0, 0)),
-            nn.Tanh(),
+            nn.LeakyReLU(),
             nn.Conv3d(32, self.output_dim, kernel_size=(3, 3, 11), padding=(1, 0, 0)),
-            nn.Tanh(),
+            nn.LeakyReLU(),
             nn.Conv3d(32, self.output_dim, kernel_size=(3, 2, 7), padding=(1, 0, 0)),
-            nn.Tanh(),
+            nn.LeakyReLU(),
         )
-
+        
         self.lin_encode = nn.Linear(self.output_dim, self.output_dim)
+        self.layer_norm_encode = nn.LayerNorm(self.output_dim)
 
     def forward(self, x):
         #print("Encoder input shape: ", x.shape)
@@ -75,6 +76,7 @@ class Encoder(nn.Module):
         #print("Encoder Reshaped for linear encoding: ", x.shape)
         x = self.lin_encode(x)
         #print("Encoder Linear encoded shape: ", x.shape)
+        x = self.layer_norm_encode(x)
         return x
 
 class Decoder(nn.Module):
@@ -89,22 +91,23 @@ class Decoder(nn.Module):
 
         self.epoch_decoder = nn.Sequential(
             nn.ConvTranspose2d(32, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)),         
-            nn.Tanh(),
+            nn.LeakyReLU(),
             nn.ConvTranspose2d(64, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),          
-            nn.Tanh(),
+            nn.LeakyReLU(),
             nn.ConvTranspose2d(32, self.nchan, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),
         )
 
         self.sequence_decoder = nn.Sequential(
             nn.ConvTranspose3d(self.input_dim, 32, kernel_size=(3, 2, 7), padding=(1, 0, 0)),
-            nn.Tanh(),
+            nn.LeakyReLU(),
             nn.ConvTranspose3d(self.input_dim, 32, kernel_size=(3, 3, 11), padding=(1, 0, 0)),
-            nn.Tanh(),
+            nn.LeakyReLU(),
             nn.ConvTranspose3d(self.input_dim, 32, kernel_size=(3, 5, 17), padding=(1, 0, 0)),
-            nn.Tanh(),
+            nn.LeakyReLU(),
         )
 
-        self.lin_decode = nn.Linear(self.input_dim, self.input_dim)
+        self.lin_decode = nn.Sequential(nn.Linear(self.input_dim, self.input_dim), nn.LeakyReLU())
+        self.layer_norm_decode = nn.LayerNorm([self.nchan, self.T, self.F])
 
     def forward(self, x):
         #print("Decoder input shape: ", x.shape)
@@ -126,4 +129,5 @@ class Decoder(nn.Module):
         #print("Decoder Epoch decoded shape: ", x.shape)
         x = x.view(batch_size, L, self.nchan, self.T, self.F)  # [batch, L, channels, T, F]
         #print("Decoder reshaped for permute: ", x.shape)
+        #x = self.layer_norm_decode(x)
         return x

@@ -9,6 +9,7 @@ from pytorch_metric_learning import losses, miners
 from pytorch_metric_learning.distances import CosineSimilarity
 from pytorch_metric_learning.reducers import ThresholdReducer
 from pytorch_metric_learning.regularizers import LpRegularizer
+import torch.nn.functional as Fun
 
 
 class SleepModule(pl.LightningModule):
@@ -126,18 +127,53 @@ class SleepAutoEncoderModule(pl.LightningModule):
         self.nn = nn
         
         self.loss = config["loss_call"]()
-
+        self.gaussian_kernel = self.gaussian_kernel(3)
         self.module_config = config
 
 
     def forward(self, x):
         return self.nn(x)
 
-    # def encode(self, x):
-    #     return self.nn.encode(x)
-    
-    # def decode(self, z):
-    #     return self.nn.decode(z)
+
+    def gaussian_kernel(self, size, sigma=0.6):
+        """Create a 2D Gaussian kernel."""
+        kernel = torch.tensor([[i, j] for i in range(size) for j in range(size)], dtype=torch.float32)
+        mean = (size - 1) / 2.0
+        variance = sigma**2
+        
+        # Calculate the Gaussian distribution
+        kernel = torch.exp(-(torch.sum((kernel - mean)**2, dim=1)) / (2.0 * variance))
+        kernel = kernel / torch.sum(kernel)
+        
+        # Reshape to a 2D matrix
+        return kernel.reshape(size, size).unsqueeze(0).unsqueeze(0)
+
+    def apply_smoothing(self, tensor: torch.Tensor):
+        # Estrai le dimensioni del tensore
+        batch_size, L, C, height, width = tensor.size()
+        
+        kernel = self.gaussian_kernel.to(tensor.device)
+        
+        # Per applicare la convoluzione, dobbiamo appiattire il tensore lungo la dimensione del batch e dei canali
+        tensor = tensor.view(batch_size * L * C, 1, height, width)
+        
+        # Applica la convoluzione 2D con padding per mantenere la dimensione dell'immagine
+        smoothed_tensor = Fun.conv2d(tensor, kernel, padding=kernel.size(3)//2)
+        #print("smoothed_tensor:", smoothed_tensor.size())
+        
+        # Ripristina le dimensioni originali
+        smoothed_tensor = smoothed_tensor.view(batch_size, L, C, height, width)
+        #print("smoothed_tensor view:", smoothed_tensor.size())
+
+        return smoothed_tensor
+
+    def remove_wake_epochs(self, x, label):
+        #print(label)
+        mask = (label != 0).all(dim=1)
+        #print(mask)
+        x = x[mask]
+        #print(x.size())
+        return x
 
     def compute_loss(
         self,
@@ -146,24 +182,51 @@ class SleepAutoEncoderModule(pl.LightningModule):
         log: str = "train",
     ):
         loss = self.loss(inputs, input_hat)
+        std_pred_T = torch.std(input_hat, dim=(-2))
+        std_input_T = torch.std(inputs, dim=(-2))
+        std_pred_F = torch.std(input_hat, dim=(-1))
+        std_input_F = torch.std(inputs, dim=(-1))
+        std_input = torch.std(inputs, dim=(-2, -1))
+        std_pred = torch.std(input_hat, dim=(-2, -1))
+        #mean_pred = torch.std(input_hat, dim=(-2, -1))
+
+        #std_penalty = torch.mean((1 / (std_pred + 1e-8))
+        std_penalty_T = torch.mean((std_pred_T - std_input_T)**2)
+        std_penalty_F = torch.mean((std_pred_F - std_input_F)**2)
+        std_penalty = torch.mean((std_input - std_pred)**2)
+        #mean_penalty = torch.mean((mean_pred)**2)
+        loss_penalized = 2*loss + std_penalty + 0.5* std_penalty_T + 0.5 * std_penalty_F
+        
         self.log(f"{log}_loss", loss, prog_bar=True)
-        return loss
+        self.log(f"{log}_std_penalty", std_penalty, prog_bar=True)
+        self.log(f"{log}_std_penalty_T", std_penalty_T, prog_bar=True)
+        self.log(f"{log}_std_penalty_F", std_penalty_F, prog_bar=True)
+        return loss_penalized
     
     def training_step(self, batch, batch_idx):
         # Logica di training
-        x, _ = batch
+        x, labels = batch
+        #x = self.remove_wake_epochs(x, labels)
+
+        #x = self.apply_smoothing(x)
         x_hat = self.forward(x)
         return self.compute_loss(x, x_hat)
 
     def validation_step(self, batch, batch_idx):
         # Logica di validazione
-        x, _ = batch
+        x, labels = batch
+        #x = self.remove_wake_epochs(x, labels)
+        #x_smoothed = self.apply_smoothing(x)
+        #x_hat = self.forward(x_smoothed)
         x_hat = self.forward(x)
         return self.compute_loss(x, x_hat, log="val")
 
     def test_step(self, batch, batch_idx):
         # Logica di training
-        x, _ = batch
+        x, labels = batch
+        #x = self.remove_wake_epochs(x, labels)
+        #x_smoothed = self.apply_smoothing(x)
+        #x_hat = self.forward(x_smoothed)
         x_hat = self.forward(x)
         return self.compute_loss(x, x_hat, log="test")
     

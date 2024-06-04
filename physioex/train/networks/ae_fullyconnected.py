@@ -10,9 +10,9 @@ from physioex.train.networks.base import SleepAutoEncoderModule
 module_config = dict()
 
 def get_layer_list(input_dim, output_dim, n_hlayers, hlayer_sizes):
-    layers = [nn.Linear(input_dim, hlayer_sizes[0]), nn.Tanh()]
+    layers = [nn.Linear(input_dim, hlayer_sizes[0]), nn.LeakyReLU()]
     for i in range(n_hlayers-1):
-        layers.extend([nn.Linear(hlayer_sizes[i], hlayer_sizes[i+1]), nn.Tanh()])
+        layers.extend([nn.Linear(hlayer_sizes[i], hlayer_sizes[i+1]), nn.LeakyReLU()])
     layers.append(nn.Linear(hlayer_sizes[-1], output_dim))
 
     return layers
@@ -44,13 +44,13 @@ class Encoder(nn.Module):
         self.output_dim = config["latent_dim"]
 
         self.epoch_encoder = nn.Sequential(*get_layer_list(self.input_dim, self.epoch_encode_dim,
-                                                           #3, [512, 256, 128]))
-                                                           1, [128]))
+                                                           1, [128]), nn.LeakyReLU())
         
         self.sequence_encoder = nn.Sequential(*get_layer_list(self.epoch_encode_dim * self.L, self.output_dim * self.L,
-                                                              #3, [128, 64, 32]))
-                                                                1, [128]))
+                                                              1, [128]), nn.LeakyReLU())
+
         self.lin_encode = nn.Linear(self.output_dim, self.output_dim)
+        self.layer_norm = nn.LayerNorm(self.output_dim)
 
     def forward(self, x):
         #print("Encoder input shape: ", x.shape)
@@ -66,6 +66,7 @@ class Encoder(nn.Module):
         #print("Encoder reshaped sequence encoded shape: ", x.shape)
         x = self.lin_encode(x)
         #print("Encoder lin_encode shape: ", x.shape)
+        x = self.layer_norm(x)
         return x
 
 class Decoder(nn.Module):
@@ -80,14 +81,13 @@ class Decoder(nn.Module):
         self.output_dim = self.nchan * self.T * self.F
 
         self.sequence_decoder = nn.Sequential(*get_layer_list(self.input_dim * self.L, self.epoch_encode_dim * self.L,
-                                                          #3, [32, 64, 128]))
-                                                            1, [128]))
+                                                            1, [128]), nn.LeakyReLU())
         
         self.epoch_decoder = nn.Sequential(*get_layer_list(self.epoch_encode_dim, self.output_dim,
-                                                          #3, [128, 256, 512]))
                                                           1, [128]))
         
-        self.lin_decode = nn.Linear(self.input_dim, self.input_dim)
+        self.lin_decode = nn.Sequential(nn.Linear(self.input_dim, self.input_dim), nn.LeakyReLU())
+        self.layer_norm = nn.LayerNorm([self.nchan, self.T, self.F])
 
     def forward(self, x):
         x = self.lin_decode(x)
@@ -102,6 +102,7 @@ class Decoder(nn.Module):
         #print("Decoder epoch decoded shape: ", x.shape)
         x = x.view(-1, self.L, self.nchan, self.T, self.F)
         #print("Decoder reshaped epoch decoded shape: ", x.shape)
+        x = self.layer_norm(x)
         return x
 
     
