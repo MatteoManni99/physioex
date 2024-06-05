@@ -8,8 +8,8 @@ from joblib import Parallel, delayed
 from lightning.pytorch import seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint, RichProgressBar
 
-from physioex.data import TimeDistributedModule, datasets
-from physioex.train.networks import config
+from physioex.data import TimeDistributedModule, get_datasets
+from physioex.train.networks import get_config
 from physioex.train.networks.utils.loss import config as loss_config
 
 
@@ -37,6 +37,9 @@ class SelfSupervisedTrainer:
     ):
 
         seed_everything(42, workers=True)
+
+        datasets = get_datasets()
+        config = get_config()
 
         self.dataset_call = datasets[dataset_name]
         self.model_call = config[model_name]["module"]
