@@ -30,7 +30,7 @@ class Net(nn.Module):
         self.lin_decode = nn.Linear(module_config["latent_dim"], 2 * module_config["seqnhidden2"])
 
         self.layer_norm = nn.LayerNorm(module_config["latent_dim"])
-        self.layer_norm2 = nn.LayerNorm(module_config["seqnhidden1"]*2)
+        #self.layer_norm2 = nn.LayerNorm(module_config["seqnhidden1"]*2)
         
         self.sequence_decoder = SequenceDecoder(module_config)
         self.epoch_decoder = EpochDecoder2(module_config)
@@ -43,39 +43,6 @@ class Net(nn.Module):
         x = self.epoch_encoder(x)
         #print("after epoch encoder:", x.size())
         x = x.view(batch, self.L, -1)
-        #print("reshape:", x.size())
-        x = self.sequence_encoder.encode(x)
-        #print("after sequence encoder:", x.size())
-        x = self.lin_encode(x)
-        #print("after lin encode:", x.size())
-        return x
-    
-    def encode_norm(self, x):
-        batch = x.size(0)
-        #print("input:", x.size())
-        x = x.view(-1, self.nchan, self.T, self.F)
-        #print("reshape:", x.size())
-        x = self.epoch_encoder(x)
-        #print("after epoch encoder:", x.size())
-        x = x.view(batch, self.L, -1)
-        #print("reshape:", x.size())
-        x = self.sequence_encoder.encode(x)
-        #print("after sequence encoder:", x.size())
-        x = self.lin_encode(x)
-        x = self.layer_norm(x)
-        #print("after lin encode:", x.size())
-        return x
-    
-    def encode_norm2(self, x):
-        batch = x.size(0)
-        #print("input:", x.size())
-        x = x.view(-1, self.nchan, self.T, self.F)
-        #print("reshape:", x.size())
-        x = self.epoch_encoder(x)
-        #print("after epoch encoder:", x.size())
-        x = x.view(batch, self.L, -1)
-        
-        x = self.layer_norm2(x)
         #print("reshape:", x.size())
         x = self.sequence_encoder.encode(x)
         #print("after sequence encoder:", x.size())
@@ -98,7 +65,7 @@ class Net(nn.Module):
         return x
 
     def forward(self, x):
-        x = self.encode_norm2(x)
+        x = self.encode(x)
         x = self.decode(x)
         return x
 

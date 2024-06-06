@@ -127,7 +127,7 @@ class SleepAutoEncoderModule(pl.LightningModule):
         self.nn = nn
         
         self.loss = config["loss_call"]()
-        self.gaussian_kernel = self.gaussian_kernel(3)
+        #self.gaussian_kernel = self.gaussian_kernel(3)
         self.module_config = config
 
 

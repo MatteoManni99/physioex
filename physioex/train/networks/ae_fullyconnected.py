@@ -87,7 +87,7 @@ class Decoder(nn.Module):
                                                           1, [128]))
         
         self.lin_decode = nn.Sequential(nn.Linear(self.input_dim, self.input_dim), nn.LeakyReLU())
-        self.layer_norm = nn.LayerNorm([self.nchan, self.T, self.F])
+        #self.layer_norm = nn.LayerNorm([self.nchan, self.T, self.F])
 
     def forward(self, x):
         x = self.lin_decode(x)
@@ -102,7 +102,7 @@ class Decoder(nn.Module):
         #print("Decoder epoch decoded shape: ", x.shape)
         x = x.view(-1, self.L, self.nchan, self.T, self.F)
         #print("Decoder reshaped epoch decoded shape: ", x.shape)
-        x = self.layer_norm(x)
+        #x = self.layer_norm(x)
         return x
 
     

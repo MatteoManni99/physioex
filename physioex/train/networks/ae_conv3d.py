@@ -107,7 +107,7 @@ class Decoder(nn.Module):
         )
 
         self.lin_decode = nn.Sequential(nn.Linear(self.input_dim, self.input_dim), nn.LeakyReLU())
-        self.layer_norm_decode = nn.LayerNorm([self.nchan, self.T, self.F])
+        #self.layer_norm_decode = nn.LayerNorm([self.nchan, self.T, self.F])
 
     def forward(self, x):
         #print("Decoder input shape: ", x.shape)

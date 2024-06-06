@@ -24,16 +24,18 @@ from physioex.data.utils import read_cache, write_cache
 from physioex.data.sleep_edf.sleep_edf import SleepEDF
 from physioex.data.dreem.dreem import Dreem
 from physioex.data.shhs.shhs import Shhs
+from physioex.data.mass.mass import Mass
 from physioex.data.utils import read_config
 
-dataset_class = {"sleep_physionet": SleepEDF, "dreem": Dreem, "shhs": Shhs}
+dataset_class = {"sleep_physionet": SleepEDF, "dreem": Dreem, "mass": Mass, "shhs": Shhs}
 
 equivalent_picks = {"dreem_EEG": "C3-M2", "dreem_EOG": "EOG", "dreem_EMG": "EMG"}
 equivalent_picks.update({"sleep_physionet_EEG": "Fpz-Cz", "sleep_physionet_EOG": "EOG", "sleep_physionet_EMG": "EMG"})
 equivalent_picks.update({"shhs_EEG": "EEG", "shhs_EOG": "EOG", "shhs_EMG": "EMG"})
+equivalent_picks.update({"mass_EEG": "EEG", "mass_EOG": "EOG", "mass_EMG": "EMG"})
 
-datasets_to_merge = ["sleep_physionet", "dreem", "dreem"]
-versions_to_merge = [ "2018", "dodh", "dodo"]
+datasets_to_merge = ["sleep_physionet", "dreem", "dreem", "mass"]
+versions_to_merge = [ "2018", "dodh", "dodo", "_"]
 
 class SleepMerged(PhysioExDataset):
     def __init__(
