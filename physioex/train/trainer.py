@@ -1,17 +1,20 @@
 import copy
 import uuid
+from multiprocessing import Pool
 from pathlib import Path
 
 import pandas as pd
 import pytorch_lightning as pl
 import torch
-from joblib import Parallel, delayed
+
+# from joblib import Parallel, delayed
 from lightning.pytorch import seed_everything
 from loguru import logger
 from pytorch_lightning.callbacks import ModelCheckpoint, RichProgressBar
+from pytorch_lightning.loggers import CSVLogger, WandbLogger
 
+import wandb
 from physioex.data import TimeDistributedModule, get_datasets
-
 from physioex.train.networks import get_config
 from physioex.train.networks.utils.loss import config as loss_config
 
@@ -33,12 +36,19 @@ class Trainer:
         batch_size: int = 32,
         n_jobs: int = 10,
         imbalance: bool = False,
+        use_wandb: bool = False,
     ):
 
         seed_everything(42, workers=True)
 
         datasets = get_datasets()
         config = get_config()
+
+        self.use_wandb = use_wandb
+
+        self.dataset_name = dataset_name
+        self.model_name = model_name
+        self.loss_name = loss_name
 
         self.dataset_call = datasets[dataset_name]
         self.model_call = config[model_name]["module"]
@@ -106,6 +116,7 @@ class Trainer:
                 mode="max",
                 dirpath=self.ckp_path,
                 filename="fold=%d-{epoch}-{step}-{val_f1:.2f}" % fold,
+                save_weights_only=False,
             )
         else:
             checkpoint_callback = ModelCheckpoint(
@@ -114,21 +125,57 @@ class Trainer:
                 mode="max",
                 dirpath=self.ckp_path,
                 filename="fold=%d-{epoch}-{step}-{val_acc:.2f}" % fold,
+                save_weights_only=False,
             )
 
         progress_bar_callback = RichProgressBar()
 
+        if self.use_wandb:
+            my_logger = WandbLogger(
+                group=self.dataset_name,
+                project=self.model_name,
+                name=f"{self.model_name}-{self.dataset_name}-v.{self.version}-fold={fold}",
+                log_model="False",
+                entity="ggagliar-sleep",
+            )
+        else:
+            my_logger = CSVLogger(save_dir=self.ckp_path)
+
         # Configura il trainer con le callback
         trainer = pl.Trainer(
+            devices="auto",
             max_epochs=self.max_epoch,
             val_check_interval=self.val_check_interval,
             callbacks=[checkpoint_callback, progress_bar_callback],
             deterministic=True,
+            logger=my_logger,
         )
+
+        if self.use_wandb:
+            my_logger.log_hyperparams(
+                {
+                    "model": self.model_name,
+                    "dataset": self.dataset_name,
+                    "version": self.version,
+                    "monitor": "val_acc" if not self.imbalance else "val_f1",
+                    "fold": fold,
+                    "batch_size": self.batch_size,
+                    "loss": self.loss_name,
+                }
+            )
 
         logger.info("JOB:%d-Training model" % fold)
         # Addestra il modello utilizzando il trainer e il DataModule
         trainer.fit(module, datamodule=datamodule)
+
+        # Salva il modello come un artefatto
+        if self.use_wandb:
+            artifact = wandb.Artifact(
+                f"{self.model_name}-{self.dataset_name}-v.{self.version}",
+                type=self.model_name,
+            )
+            artifact.add_file(checkpoint_callback.best_model_path)
+            my_logger.experiment.log_artifact(artifact)
 
         logger.info("JOB:%d-Evaluating model" % fold)
         val_results = trainer.test(
@@ -141,9 +188,7 @@ class Trainer:
     def run(self):
         logger.info("Jobs pool spawning")
 
-        results = Parallel(n_jobs=self.n_jobs)(
-            delayed(self.train_evaluate)(fold) for fold in self.folds
-        )
+        results = [self.train_evaluate(fold) for fold in self.folds]
 
         logger.info("Results successfully collected from jobs pool")
 

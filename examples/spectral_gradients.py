@@ -13,6 +13,8 @@ seed_everything(42)
 
 import os
 
+from captum.attr import IntegratedGradients
+
 from physioex.data import Shhs, SleepEDF, TimeDistributedModule
 from physioex.explain.spectralgradients import (
     SpectralGradients,
@@ -26,10 +28,9 @@ from physioex.train.networks.utils.loss import config as losses
 from physioex.train.networks.utils.target_transform import get_mid_label
 
 
-from captum.attr import IntegratedGradients
-
 def smooth(x, kernel_size=3):
-    return torch.nn.AvgPool1d(kernel_size=kernel_size, stride=int(kernel_size / 2))(x) 
+    return torch.nn.AvgPool1d(kernel_size=kernel_size, stride=int(kernel_size / 2))(x)
+
 
 def process_explanations(explanations, kernel_size=300):
     explanations = explanations.squeeze()
@@ -45,6 +46,7 @@ def process_explanations(explanations, kernel_size=300):
     explanations = smooth(explanations, kernel_size) * kernel_size
 
     return explanations
+
 
 # model parameters
 model_name = "chambon2018"
@@ -115,15 +117,19 @@ for i, (x, y) in enumerate(tqdm(datalaoder, total=n_batches)):
     if i == n_batches:
         break
 
-    explanations.extend( sg.attribute(x.to(device), target=y.to(device), n_steps= 5).detach().cpu() )
-    explanations_ig.extend( ig.attribute(x.to(device), target=y.to(device), n_steps = 5).detach().cpu() )
+    explanations.extend(
+        sg.attribute(x.to(device), target=y.to(device), n_steps=5).detach().cpu()
+    )
+    explanations_ig.extend(
+        ig.attribute(x.to(device), target=y.to(device), n_steps=5).detach().cpu()
+    )
 
 explanations = torch.stack(explanations)
 explanations_ig = torch.stack(explanations_ig)
 
-approximation_error = torch.abs( explanations.sum( dim = -1 ) - explanations_ig )
+approximation_error = torch.abs(explanations.sum(dim=-1) - explanations_ig)
 micro_approximation_error = approximation_error.reshape(-1).mean()
-macro_approximation_error = approximation_error.mean(dim=-1).reshape(-1).mean()   
+macro_approximation_error = approximation_error.mean(dim=-1).reshape(-1).mean()
 
 explanations = process_explanations(explanations)
 
@@ -132,7 +138,7 @@ explanations = process_explanations(explanations)
 
 # compute the variance over the bands dimension
 
-variances = explanations.var(dim=1).reshape(-1).mean() # batch, samples
+variances = explanations.var(dim=1).reshape(-1).mean()  # batch, samples
 
 # write the variances to a file
 
@@ -140,13 +146,15 @@ with open(f"results/{model_name}/explanations_report.txt", "w") as f:
     f.write(f"Mean variance: {variances} \n")
 
 
-with open(f"results/{model_name}/explanations_report.txt", 'a') as f:
+with open(f"results/{model_name}/explanations_report.txt", "a") as f:
     f.write(f"Macro approximation error: {macro_approximation_error}\n")
     f.write(f"Micro approximation error: {micro_approximation_error}\n")
 
 # compute the frequency of elements of different sign over the bands dimension
 
-explanations_sign = explanations.sign() # compute the frequency of discording signs in the same bands
+explanations_sign = (
+    explanations.sign()
+)  # compute the frequency of discording signs in the same bands
 
 num_discording_macro = 0
 num_discording_micro = 0
@@ -158,23 +166,21 @@ print(explanations_sign.size())
 for sample in explanations_sign:
     num_pos = (sample == 1).sum(dim=0)
     num_neg = (sample == -1).sum(dim=0)
-    
+
     discording = (num_pos >= 1) & (num_neg >= 1)
-    
+
     num_discording_macro += discording.sum().item()
     num_discording_micro += discording.sum(dim=0).item()
-    
+
     total_elements_macro += sample.size(0)
     total_elements_micro += sample.numel()
 
 frequency_discording_macro = num_discording_macro / total_elements_macro
 frequency_discording_micro = num_discording_micro / total_elements_micro
 
-with open(f"results/{model_name}/explanations_report.txt", 'a') as f:
+with open(f"results/{model_name}/explanations_report.txt", "a") as f:
     f.write(f"Macro frequency of discording signs: {frequency_discording_macro}\n")
     f.write(f"Micro frequency of discording signs: {frequency_discording_micro}\n")
-    
-    
 
 
 """

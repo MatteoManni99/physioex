@@ -1,22 +1,27 @@
 import argparse
-import importlib
-from pathlib import Path
 
-from loguru import logger
+from physioex.data.dcsm.preprocess import DCSMPreprocessor
+from physioex.data.dreem.preprocess import DREEMPreprocessor
+from physioex.data.hmc.preprocess import HMCPreprocessor
+from physioex.data.isruc.preprocess import ISRUCPreprocessor
+from physioex.data.mass.preprocess import MASSPreprocessor
+from physioex.data.shhs.preprocess import SHHSPreprocessor
+from physioex.data.sleep_edf.preprocess import SLEEPEDFPreprocessor
+from physioex.data.svuh.preprocess import SVUHPreprocessor
 
-from physioex.data.constant import set_data_folder
-
-preprocess = {
-    "sleep_physionet": "physioex.data.sleep_edf.preprocess",
-    "dreem": "physioex.data.dreem.preprocess",
-    "shhs": "physioex.data.shhs.preprocess",
-    "mass": "physioex.data.mass.preprocess",
+preprocessors = {
+    "dcsm": DCSMPreprocessor,
+    "dreem": DREEMPreprocessor,
+    "isruc": ISRUCPreprocessor,
+    "mass": MASSPreprocessor,
+    "shhs": SHHSPreprocessor,
+    "sleep_edf": SLEEPEDFPreprocessor,
+    "svuh": SVUHPreprocessor,
+    "hmc": HMCPreprocessor,
 }
 
 
 def main():
-    global data_folder
-
     parser = argparse.ArgumentParser(description="Preprocess a dataset.")
     parser.add_argument(
         "--dataset",
@@ -38,27 +43,4 @@ def main():
 
     args = parser.parse_args()
 
-    if args.data_folder is not None:
-        # check if the path in args is a valid path
-        if not Path(args.data_folder).exists():
-            logger.warning(
-                f"Path {args.data_folder} does not exist. Trying to create it."
-            )
-            try:
-                Path(args.data_folder).mkdir(parents=True, exist_ok=True)
-            except Exception as e:
-                logger.error(f"Could not create the path {args.data_folder}.")
-                logger.error(f"Error: {e}")
-                return
-
-        set_data_folder(args.data_folder)
-        logger.info(f"Data folder set to {args.data_folder}")
-
-    try:
-        module = preprocess[args.dataset]
-    except KeyError:
-        logger.error(f"Dataset {args.dataset} not found.")
-
-    # run the code in the module
-
-    importlib.import_module(module)
+    preprocessors[args.dataset](data_folder=args.data_folder).run()

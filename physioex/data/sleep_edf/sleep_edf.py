@@ -1,92 +1,45 @@
-from pathlib import Path
+import os
 from typing import Callable, List
 
-import h5py
 import numpy as np
-import torch
-from scipy.io import loadmat
 
 from physioex.data.base import PhysioExDataset
 from physioex.data.constant import get_data_folder
+
+AVAILABLE_PICKS = ["EEG", "EOG", "EMG"]
 
 
 class SleepEDF(PhysioExDataset):
     def __init__(
         self,
-        version: str = "2018",
-        picks: List[str] = ["Fpz-Cz"],  # available [ "Fpz-Cz", "EOG", "EMG" ]
+        version: str = None,  # only 2018 available
+        picks: List[str] = ["EEG"],  # available [ "EEG", "EOG", "EMG" ]
         preprocessing: str = "raw",  # available [ "raw", "xsleepnet" ]
         sequence_length: int = 21,
         target_transform: Callable = None,
+        task: str = "sleep",
     ):
-
-        assert version in ["2018", "2013"], "version should be one of '2013'-'2018'"
         assert preprocessing in [
             "raw",
             "xsleepnet",
         ], "preprocessing should be one of 'raw'-'xsleepnet'"
         for pick in picks:
-            assert pick in [
-                "Fpz-Cz",
-                "EOG",
-                "EMG",
-            ], "pick should be one of 'C3-M3', 'EOG', 'EMG'"
+            assert pick in AVAILABLE_PICKS, "pick should be one of 'EEG, 'EOG', 'EMG'"
+
+        selected_channels = np.array(
+            [AVAILABLE_PICKS.index(pick) for pick in picks]
+        ).astype(int)
+        input_shape = [3, 3000] if preprocessing == "raw" else [3, 29, 129]
 
         super().__init__(
-            version,
-            picks,
-            preprocessing,
-            "config/sleep-edf.yaml",
-            sequence_length,
-            target_transform,
+            dataset_folder=os.path.join(get_data_folder(), "mne_data"),
+            preprocessing=preprocessing,
+            input_shape=input_shape,
+            sequence_length=sequence_length,
+            selected_channels=selected_channels,
+            target_transform=target_transform,
+            task=task,
         )
-
-        scaling_file = np.load(
-            get_data_folder()
-            + self.config[self.preprocessing + "_path"]
-            + "scaling_"
-            + self.version
-            + ".npz"
-        )
-
-        EEG_mean, EOG_mean, EMG_mean = scaling_file["mean"]
-        EEG_std, EOG_std, EMG_std = scaling_file["std"]
-
-        self.mean = []
-        self.std = []
-
-        if "Fpz-Cz" in self.picks:
-            self.mean.append(EEG_mean)
-            self.std.append(EEG_std)
-        if "EOG" in self.picks:
-            self.mean.append(EOG_mean)
-            self.std.append(EOG_std)
-        if "EMG" in self.picks:
-            self.mean.append(EMG_mean)
-            self.std.append(EMG_std)
-
-        self.mean = torch.tensor(np.array(self.mean)).float()
-        self.std = torch.tensor(np.array(self.std)).float()
-
-    def get_num_folds(self):
-        split_matrix = loadmat(self.split_path)["test_sub"]
-
-        return len(split_matrix)
-
-    def split(self, fold: int = 0):
-
-        split_matrix = loadmat(self.split_path)
-
-        test_subjects = split_matrix["test_sub"][fold][0][0]
-        valid_subjects = split_matrix["eval_sub"][fold][0][0]
-
-        # add a column to the table with 0 if the subject is in train, 1 if in valid, 2 if in test
-
-        split = np.zeros(len(self.table))
-        split[self.table["subject_id"].isin(test_subjects)] = 2
-        split[self.table["subject_id"].isin(valid_subjects)] = 1
-
-        self.table["split"] = split
 
     def __getitem__(self, idx):
         x, y = super().__getitem__(idx)

@@ -1,7 +1,12 @@
+numpy==1.26.4
 braindecode
 wfdb
 pyyaml
 loguru
+wandb
+
+pyunpack 
+patool
 
 typing
 dirhash
@@ -32,3 +37,11 @@ seaborn
 pandas
 
 npy-append-array
+rarfile
+
+pyedflib
+
+openpyxl
+
+psg_utils
+wfdb
