@@ -46,6 +46,28 @@ class CrossEntropyLoss(nn.Module, PhysioExLoss):
     def forward(self, emb, preds, targets):
         return self.ce_loss(preds, targets)
 
+class WeightedMSELoss(nn.Module, PhysioExLoss):
+    def __init__(self, params: Dict = None):
+        super(WeightedMSELoss, self).__init__()
+        self.mse_loss = nn.MSELoss(reduce=False)
+        self.border_frequency = 50
+        self.weight_before = 2
+        self.weight_after = 0
+        self.batch_size = params.get("batch_size")
+        self.weights = torch.ones(self.batch_size, params.get("seq_len"), params.get("in_channels"), params.get("T"), params.get("F"))
+        self.weights[..., :self.border_frequency] *= self.weight_before
+        self.weights[..., self.border_frequency:] *= self.weight_after
+
+    def forward(self, preds, targets):
+        mse_loss = self.mse_loss(preds, targets)
+        if(preds.size(0) == self.batch_size):
+            weighted_mse_loss = mse_loss * self.weights.to(preds.device)
+        else:
+            weighted_mse_loss = mse_loss * self.weights[:preds.size(0)].to(preds.device)
+
+        mse_first_freq = mse_loss[..., :self.border_frequency]
+        mse_last_freq = mse_loss[..., self.border_frequency:]
+        return mse_loss.mean(), mse_first_freq.mean(), mse_last_freq.mean(), weighted_mse_loss.mean()
 
 class RegressionLoss(nn.Module):
     def __init__(self, params: Dict = None):
@@ -63,4 +85,4 @@ class RegressionLoss(nn.Module):
         return combined_loss
 
 
-config = {"cel": CrossEntropyLoss, "scl": SimilarityCombinedLoss, "reg": RegressionLoss, "mse": nn.MSELoss}
+config = {"cel": CrossEntropyLoss, "scl": SimilarityCombinedLoss, "reg": RegressionLoss, "mse": nn.MSELoss(reduction="mean"), "w_mse": WeightedMSELoss}

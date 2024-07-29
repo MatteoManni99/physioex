@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from physioex.train.networks.base import SleepAutoEncoderModule
+from physioex.train.networks.base import SleepAutoEncoderModuleOld
 
 module_config = dict()
 
@@ -17,7 +17,7 @@ def get_layer_list(input_dim, output_dim, n_hlayers, hlayer_sizes):
 
     return layers
 
-class AutoEncoderFullyConnected(SleepAutoEncoderModule):
+class AutoEncoderFullyConnected(SleepAutoEncoderModuleOld):
     def __init__(self, module_config=module_config):
         super(AutoEncoderFullyConnected, self).__init__(Net(module_config), module_config)
 

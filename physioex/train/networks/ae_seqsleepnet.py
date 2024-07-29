@@ -111,11 +111,11 @@ class EpochDecoder(nn.Module):
         self.conv_transpose5 = nn.ConvTranspose2d(8, 8, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), output_padding=(0,0))
         self.conv_transpose2 = nn.ConvTranspose2d(8, 4, kernel_size=(3, 5), stride=(2, 2), padding=(1, 1), output_padding=(0,0))
         self.conv_transpose3 = nn.ConvTranspose2d(4, 1, kernel_size=(3, 5), stride=(2, 2), padding=(1, 0), output_padding=(0,0))
-        self.relu = nn.ReLU()
+        self.leaky_relu = nn.LeakyReLU()
 
     def forward(self, x):
         # Livelli fully connected
-        x = self.relu(self.fc1(x))
+        x = self.leaky_relu(self.fc1(x))
         #x = self.relu(self.fc2(x))
         #x = self.relu(self.fc3(x))
         
@@ -123,13 +123,13 @@ class EpochDecoder(nn.Module):
         x = x.view(-1, 16, 4, 16)
 
         # Strati convoluzionali trasposti
-        x = self.relu(self.conv_transpose1(x))
+        x = self.leaky_relu(self.conv_transpose1(x))
         #print("t1", x.size())
-        x = self.relu(self.conv_transpose4(x))
+        x = self.leaky_relu(self.conv_transpose4(x))
         #print("t4", x.size())
-        x = self.relu(self.conv_transpose5(x))
+        x = self.leaky_relu(self.conv_transpose5(x))
         #print("t5", x.size())
-        x = self.relu(self.conv_transpose2(x))
+        x = self.leaky_relu(self.conv_transpose2(x))
         #print("t2", x.size())
         x = self.conv_transpose3(x)
         #print("t3", x.size())
@@ -163,12 +163,12 @@ class EpochDecoder2(nn.Module):
         self.conv_transpose13 = nn.ConvTranspose2d(8, 8, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), output_padding=(0,0))
         self.conv_transpose2 = nn.ConvTranspose2d(8, 4, kernel_size=(3, 5), stride=(1, 2), padding=(1, 1), output_padding=(0,0))
         self.conv_transpose3 = nn.ConvTranspose2d(4, 1, kernel_size=(3, 5), stride=(2, 2), padding=(1, 0), output_padding=(0,0))
-        self.relu = nn.ReLU()
+        self.leaky_relu = nn.LeakyReLU()
 
     def forward(self, x):
         #print(x.size())
         # Livelli fully connected
-        x = self.relu(self.fc1(x))
+        x = self.leaky_relu(self.fc1(x))
         #x = self.relu(self.fc2(x))
         #x = self.relu(self.fc3(x))
         #print(x.size())
@@ -185,13 +185,13 @@ class EpochDecoder2(nn.Module):
         x = x.view(-1, 16, 8, 16)
         #print(x.size())
         # Strati convoluzionali trasposti
-        x = self.relu(self.conv_transpose1(x))
+        x = self.leaky_relu(self.conv_transpose1(x))
         #print("t1", x.size())
         # x = self.relu(self.conv_transpose12(x))
         # #print("t2", x.size())
         # x = self.relu(self.conv_transpose13(x))
         #print("t1", x.size())
-        x = self.relu(self.conv_transpose2(x))
+        x = self.leaky_relu(self.conv_transpose2(x))
         #print("t2", x.size())
         x = self.conv_transpose3(x)
         #print("t3", x.size())

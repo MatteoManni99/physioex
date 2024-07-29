@@ -27,13 +27,13 @@ def main():
         type=str,
         help="Specify where to save the checkpoint. Expected type: str. Default: None",
     )
-    # parser.add_argument(
-    #     "-l",
-    #     "--loss",
-    #     default="cel",
-    #     type=str,
-    #     help='Specify the loss function to use. Expected type: str. Default: "cel" (Cross Entropy Loss)',
-    # )
+    parser.add_argument(
+        "-l",
+        "--loss",
+        default="mse",
+        type=str,
+        help='Specify the loss function to use. Expected type: str. Default: "cel" (Cross Entropy Loss)',
+    )
 
     # dataset args
     parser.add_argument(
@@ -114,6 +114,13 @@ def main():
         required=False,
         help="The absolute path of the directory where the physioex dataset are stored, if None the home directory is used. Expected type: str. Optional. Default: None",
     )
+    parser.add_argument(
+        "-pc",
+        "--penalty_change",
+        default=False,
+        type=bool,
+        help="Specify if the loss will change during training, adding or removing the penalty. Expected type: bool. Default: False",
+    )
 
     args = parser.parse_args()
     
@@ -145,7 +152,7 @@ def main():
         model_name=args.experiment,
         dataset_name=args.dataset,
         ckp_path=args.checkpoint,
-        #loss_name=args.loss,
+        loss_name=args.loss,
         version=args.version,
         picks=args.picks,
         sequence_length=args.sequence_length,
@@ -153,6 +160,7 @@ def main():
         val_check_interval=args.val_check_interval,
         batch_size=args.batch_size,
         n_jobs=args.n_jobs,
+        penalty_change=args.penalty_change,
         #imbalance=args.imbalance,
     ).run()
 

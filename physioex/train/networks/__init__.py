@@ -14,6 +14,7 @@ from physioex.train.networks.tinysleepnet import TinySleepNet
 from physioex.train.networks.ae_fullyconnected import AutoEncoderFullyConnected
 from physioex.train.networks.ae_conv3d import AutoEncoderConv3D
 from physioex.train.networks.ae_seqsleepnet import AutoEncoderSeqSleepNet
+from physioex.train.networks.vae_seqsleepnet import VAESeqSleepNet
 # from physioex.train.networks.seqecgnet import SeqECGnet
 
 
@@ -76,6 +77,11 @@ config = {
     "ae_seqsleepnet": {
         "module_config": read_config("ae_seqsleepnet"),
         "module": AutoEncoderSeqSleepNet,
+        "input_transform": "xsleepnet",
+    },
+    "vae_seqsleepnet": {
+        "module_config": read_config("vae_seqsleepnet"),
+        "module": VAESeqSleepNet,
         "input_transform": "xsleepnet",
     },
 }

@@ -18,6 +18,7 @@ def load_pretrained_model(
     ckpt_path: str = None,
     softmax: bool = False,
     summary: bool = False,
+    extra_params: dict = {},
 ):
 
     # check if the experiment is a yaml file
@@ -36,7 +37,9 @@ def load_pretrained_model(
     model["module_config"]["seq_len"] = sequence_length
     model["module_config"]["in_channels"] = in_channels
     model["module_config"]["loss_call"] = losses[loss]
+    model["module_config"]["loss_name"] = loss
     model["module_config"]["loss_params"] = {"params": loss_params}
+    model["module_config"] = {**model["module_config"], **extra_params}
 
     if ckpt_path is None:
         # read the checkpoint path table from the current package directory

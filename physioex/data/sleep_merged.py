@@ -29,8 +29,8 @@ from physioex.data.utils import read_config
 
 dataset_class = {"sleep_physionet": SleepEDF, "dreem": Dreem, "mass": Mass, "shhs": Shhs}
 
-equivalent_picks = {"dreem_EEG": "C3-M2", "dreem_EOG": "EOG", "dreem_EMG": "EMG"}
-equivalent_picks.update({"sleep_physionet_EEG": "Fpz-Cz", "sleep_physionet_EOG": "EOG", "sleep_physionet_EMG": "EMG"})
+equivalent_picks = {"dreem_EEG": "EEG", "dreem_EOG": "EOG", "dreem_EMG": "EMG"}
+equivalent_picks.update({"sleep_physionet_EEG": "EEG", "sleep_physionet_EOG": "EOG", "sleep_physionet_EMG": "EMG"})
 equivalent_picks.update({"shhs_EEG": "EEG", "shhs_EOG": "EOG", "shhs_EMG": "EMG"})
 equivalent_picks.update({"mass_EEG": "EEG", "mass_EOG": "EOG", "mass_EMG": "EMG"})
 

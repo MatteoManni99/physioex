@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 from joblib import Parallel, delayed
 from lightning.pytorch import seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint, RichProgressBar
+from pytorch_lightning.callbacks import Callback
 
 from physioex.data import TimeDistributedModule, get_datasets
 from physioex.train.networks import get_config
@@ -33,6 +34,7 @@ class SelfSupervisedTrainer:
         val_check_interval: int = 300,
         batch_size: int = 32,
         n_jobs: int = 10,
+        penalty_change: bool = False,
         #imbalance: bool = False,
     ):
 
@@ -47,12 +49,15 @@ class SelfSupervisedTrainer:
         #self.target_transform = config[model_name]["target_transform"]
         self.module_config = config[model_name]["module_config"]
         self.module_config["seq_len"] = sequence_length
+        self.module_config["batch_size"] = batch_size
 
         self.batch_size = batch_size
         self.max_epoch = max_epoch
         self.val_check_interval = val_check_interval
         self.version = version
         self.n_jobs = n_jobs
+        self.penalty_change = penalty_change
+        self.loss_name = loss_name
 
         if ckp_path is None:
             self.ckp_path = "models/" + str(uuid.uuid4()) + "/"
@@ -79,6 +84,8 @@ class SelfSupervisedTrainer:
         self.folds = list(range(self.dataset.get_num_folds()))
 
         self.module_config["loss_call"] = loss_config[loss_name]
+        self.module_config["loss_name"] = loss_name
+
         #self.module_config["loss_params"] = dict()
 
     def train_evaluate(self, fold: int = 0):
@@ -110,11 +117,16 @@ class SelfSupervisedTrainer:
         
         progress_bar_callback = RichProgressBar()
 
+        if self.penalty_change:
+            callbacks_list = [checkpoint_callback, progress_bar_callback, ChangeLossCallback()]
+        else:
+            callbacks_list = [checkpoint_callback, progress_bar_callback]
+
         # Configura il trainer con le callback
         trainer = pl.Trainer(
             max_epochs=self.max_epoch,
             val_check_interval=self.val_check_interval,
-            callbacks=[checkpoint_callback, progress_bar_callback],
+            callbacks=callbacks_list,
             deterministic=True,
         )
 
@@ -157,3 +169,18 @@ class SelfSupervisedTrainer:
             raise e
 
         logger.info("Results successfully saved in %s" % self.ckp_path)
+    
+class ChangeLossCallback(Callback):
+    def __init__(self):
+        super().__init__()
+        self.last_loss = float('inf')
+    
+    def on_validation_end(self, trainer, pl_module):
+        val_loss = trainer.callback_metrics['val_loss']
+        print("Val loss: ", val_loss)
+        print("Last loss: ", self.last_loss)
+        if(abs(val_loss - self.last_loss) < 0.02):
+            print("Loss is not improving")
+            pl_module.penalty = not(pl_module.penalty)
+            print("Penalty is now: ", pl_module.penalty)
+        self.last_loss = val_loss

@@ -142,12 +142,12 @@ class SleepModule(pl.LightningModule):
 
 ####################################################################################################
 
-class SleepAutoEncoderModule(pl.LightningModule):
+class SleepAutoEncoderModuleOld(pl.LightningModule):
     def __init__(self, nn: nn.Module, config: Dict):
-        super(SleepAutoEncoderModule, self).__init__()
+        super(SleepAutoEncoderModuleOld, self).__init__()
         self.nn = nn
         
-        self.loss = config["loss_call"]()
+        self.loss = config["loss_call"]
         #self.gaussian_kernel = self.gaussian_kernel(3)
         self.module_config = config
 
@@ -248,6 +248,130 @@ class SleepAutoEncoderModule(pl.LightningModule):
         #x = self.remove_wake_epochs(x, labels)
         #x_smoothed = self.apply_smoothing(x)
         #x_hat = self.forward(x_smoothed)
+        x_hat = self.forward(x)
+        return self.compute_loss(x, x_hat, log="test")
+    
+    def configure_optimizers(self):
+        self.opt = optim.Adam(
+            self.nn.parameters(),
+            lr=1e-4,
+            weight_decay=1e-3,
+        )
+
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            self.opt,
+            mode="max",
+            factor=0.5,
+            patience=10,
+            threshold=0.0001,
+            threshold_mode="rel",
+            cooldown=0,
+            min_lr=0,
+            eps=1e-08,
+            verbose=True,
+        )
+
+        return {
+            "optimizer": self.opt,
+            "lr_scheduler": {"scheduler": self.scheduler, "monitor": "val_loss"},
+        }
+
+
+class SleepAutoEncoderModule(pl.LightningModule):
+    def __init__(self, nn: nn.Module, config: Dict):
+        super(SleepAutoEncoderModule, self).__init__()
+        self.nn = nn
+        self.module_config = config
+        if(config["loss_name"] == "w_mse"):
+            self.loss = config["loss_call"](config)
+        else:
+            self.loss = config["loss_call"]
+        
+    def forward(self, x):
+        return self.nn(x)
+
+
+    def compute_loss(
+        self,
+        inputs,
+        input_hat,
+        log: str = "train",
+    ):
+
+        if(self.module_config["loss_name"] == "w_mse"):
+            mse, mse_first_freq, mse_last_freq, weighted_mse = self.loss(inputs, input_hat)
+            self.log(f"{log}_loss", weighted_mse, prog_bar=True)
+            self.log(f"{log}_mse", mse, prog_bar=True)
+            self.log(f"{log}_mse_first_freq", mse_first_freq, prog_bar=True)
+            self.log(f"{log}_mse_last_freq", mse_last_freq, prog_bar=True)
+            #standard deviation penalty only on the first 50 frequencies
+            std_penalty, std_penalty_T, std_penalty_F = self.w_std_penalty(inputs, input_hat)
+            loss = 2 * weighted_mse + 0.2 * std_penalty + 0.4 * std_penalty_T + 0.2 * std_penalty_F
+        else:
+            mse = self.loss(inputs, input_hat)
+            self.log(f"{log}_loss", mse, prog_bar=True)
+            std_penalty, std_penalty_T, std_penalty_F = self.std_penalty(inputs, input_hat)
+            loss = 2 * mse + 0.5 * std_penalty + 0.5 * std_penalty_T + 0.2 * std_penalty_F
+        
+        self.log(f"{log}_loss_tot", loss, prog_bar=True)
+        self.log(f"{log}_std_penalty", std_penalty, prog_bar=True)
+        self.log(f"{log}_std_penalty_T", std_penalty_T, prog_bar=True)
+        self.log(f"{log}_std_penalty_F", std_penalty_F, prog_bar=True)
+        return loss
+        
+        
+    def std_penalty(self, preds, targets):
+        std_pred_T = torch.std(preds, dim=(-2))
+        std_input_T = torch.std(targets, dim=(-2))
+        std_pred_F = torch.std(preds, dim=(-1))
+        std_input_F = torch.std(targets, dim=(-1))
+        std_input = torch.std(targets, dim=(-2, -1))
+        std_pred = torch.std(preds, dim=(-2, -1))
+        #mean_pred = torch.std(input_hat, dim=(-2, -1))
+
+        #std_penalty = torch.mean((1 / (std_pred + 1e-8))
+        std_penalty_T = torch.mean((std_pred_T - std_input_T)**2)
+        std_penalty_F = torch.mean((std_pred_F - std_input_F)**2)
+        std_penalty = torch.mean((std_input - std_pred)**2)
+        #mean_penalty = torch.mean((mean_pred)**2)
+
+        return std_penalty, std_penalty_T, std_penalty_F
+    
+    def w_std_penalty(self, preds, targets, frequency = 50):
+        preds = preds[..., :frequency]
+        targets = targets[..., :frequency]
+        
+        std_pred_T = torch.std(preds, dim=(-2))
+        std_input_T = torch.std(targets, dim=(-2))
+        std_pred_F = torch.std(preds, dim=(-1))
+        std_input_F = torch.std(targets, dim=(-1))
+        std_input = torch.std(targets, dim=(-2, -1))
+        std_pred = torch.std(preds, dim=(-2, -1))
+        #mean_pred = torch.std(input_hat, dim=(-2, -1))
+
+        #std_penalty = torch.mean((1 / (std_pred + 1e-8))
+        std_penalty_T = torch.mean((std_pred_T - std_input_T)**2)
+        std_penalty_F = torch.mean((std_pred_F - std_input_F)**2)
+        std_penalty = torch.mean((std_input - std_pred)**2)
+        #mean_penalty = torch.mean((mean_pred)**2)
+
+        return std_penalty, std_penalty_T, std_penalty_F
+
+    def training_step(self, batch, batch_idx):
+        # Logica di training
+        x, labels = batch
+        x_hat = self.forward(x)
+        return self.compute_loss(x, x_hat)
+
+    def validation_step(self, batch, batch_idx):
+        # Logica di validazione
+        x, labels = batch
+        x_hat = self.forward(x)
+        return self.compute_loss(x, x_hat, log="val")
+
+    def test_step(self, batch, batch_idx):
+        # Logica di training
+        x, labels = batch
         x_hat = self.forward(x)
         return self.compute_loss(x, x_hat, log="test")
     
