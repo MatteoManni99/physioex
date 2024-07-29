@@ -46,6 +46,27 @@ class CrossEntropyLoss(nn.Module, PhysioExLoss):
     def forward(self, emb, preds, targets):
         return self.ce_loss(preds, targets)
 
+class Reconstruction(nn.Module, PhysioExLoss):
+    def std_penalty(self, preds, targets):
+        std_input = torch.std(targets, dim=(-2, -1))
+        std_pred = torch.std(preds, dim=(-2, -1))
+        std_pred_T = torch.std(preds, dim=(-2))
+        std_input_T = torch.std(targets, dim=(-2))
+        std_pred_F = torch.std(preds, dim=(-1))
+        std_input_F = torch.std(targets, dim=(-1))
+
+        std_penalty = torch.mean((std_input - std_pred)**2)
+        std_penalty_T = torch.mean((std_pred_T - std_input_T)**2)
+        std_penalty_F = torch.mean((std_pred_F - std_input_F)**2)
+
+        return std_penalty, std_penalty_T, std_penalty_F
+
+    def w_std_penalty(self, preds, targets, frequency = 50):
+        preds = preds[..., :frequency]
+        targets = targets[..., :frequency]
+
+        return self.std_penalty(preds, targets)
+    
 class WeightedMSELoss(nn.Module, PhysioExLoss):
     def __init__(self, params: Dict = None):
         super(WeightedMSELoss, self).__init__()

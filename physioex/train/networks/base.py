@@ -10,7 +10,7 @@ from pytorch_metric_learning.distances import CosineSimilarity
 from pytorch_metric_learning.reducers import ThresholdReducer
 from pytorch_metric_learning.regularizers import LpRegularizer
 import torch.nn.functional as Fun
-
+from physioex.train.networks.utils.loss import Reconstruction
 
 class SleepModule(pl.LightningModule):
     def __init__(self, nn: nn.Module, config: Dict):
@@ -284,8 +284,10 @@ class SleepAutoEncoderModule(pl.LightningModule):
         self.module_config = config
         if(config["loss_name"] == "w_mse"):
             self.loss = config["loss_call"](config)
+            self.std_penalty = Reconstruction().std_penalty_w
         else:
             self.loss = config["loss_call"]
+            self.std_penalty = Reconstruction().std_penalty
         
     def forward(self, x):
         return self.nn(x)
@@ -299,64 +301,23 @@ class SleepAutoEncoderModule(pl.LightningModule):
     ):
 
         if(self.module_config["loss_name"] == "w_mse"):
-            mse, mse_first_freq, mse_last_freq, weighted_mse = self.loss(inputs, input_hat)
-            self.log(f"{log}_loss", weighted_mse, prog_bar=True)
-            self.log(f"{log}_mse", mse, prog_bar=True)
+            mse_vanilla, mse_first_freq, mse_last_freq, mse = self.loss(inputs, input_hat)
+            self.log(f"{log}_mse_vanilla", mse_vanilla, prog_bar=True)
             self.log(f"{log}_mse_first_freq", mse_first_freq, prog_bar=True)
             self.log(f"{log}_mse_last_freq", mse_last_freq, prog_bar=True)
-            #standard deviation penalty only on the first 50 frequencies
-            std_penalty, std_penalty_T, std_penalty_F = self.w_std_penalty(inputs, input_hat)
-            loss = 2 * weighted_mse + 0.2 * std_penalty + 0.4 * std_penalty_T + 0.2 * std_penalty_F
         else:
             mse = self.loss(inputs, input_hat)
-            self.log(f"{log}_loss", mse, prog_bar=True)
-            std_penalty, std_penalty_T, std_penalty_F = self.std_penalty(inputs, input_hat)
-            loss = 2 * mse + 0.5 * std_penalty + 0.5 * std_penalty_T + 0.2 * std_penalty_F
         
-        self.log(f"{log}_loss_tot", loss, prog_bar=True)
+        std_penalty, std_penalty_T, std_penalty_F = self.std_penalty(inputs, input_hat)
+        loss_tot = 2 * mse + 0.5 * std_penalty + 0.5 * std_penalty_T + 0.5 * std_penalty_F
+
+        self.log(f"{log}_loss", mse, prog_bar=True)
+        self.log(f"{log}_loss_tot", loss_tot, prog_bar=True)
         self.log(f"{log}_std_penalty", std_penalty, prog_bar=True)
         self.log(f"{log}_std_penalty_T", std_penalty_T, prog_bar=True)
         self.log(f"{log}_std_penalty_F", std_penalty_F, prog_bar=True)
-        return loss
+        return loss_tot
         
-        
-    def std_penalty(self, preds, targets):
-        std_pred_T = torch.std(preds, dim=(-2))
-        std_input_T = torch.std(targets, dim=(-2))
-        std_pred_F = torch.std(preds, dim=(-1))
-        std_input_F = torch.std(targets, dim=(-1))
-        std_input = torch.std(targets, dim=(-2, -1))
-        std_pred = torch.std(preds, dim=(-2, -1))
-        #mean_pred = torch.std(input_hat, dim=(-2, -1))
-
-        #std_penalty = torch.mean((1 / (std_pred + 1e-8))
-        std_penalty_T = torch.mean((std_pred_T - std_input_T)**2)
-        std_penalty_F = torch.mean((std_pred_F - std_input_F)**2)
-        std_penalty = torch.mean((std_input - std_pred)**2)
-        #mean_penalty = torch.mean((mean_pred)**2)
-
-        return std_penalty, std_penalty_T, std_penalty_F
-    
-    def w_std_penalty(self, preds, targets, frequency = 50):
-        preds = preds[..., :frequency]
-        targets = targets[..., :frequency]
-        
-        std_pred_T = torch.std(preds, dim=(-2))
-        std_input_T = torch.std(targets, dim=(-2))
-        std_pred_F = torch.std(preds, dim=(-1))
-        std_input_F = torch.std(targets, dim=(-1))
-        std_input = torch.std(targets, dim=(-2, -1))
-        std_pred = torch.std(preds, dim=(-2, -1))
-        #mean_pred = torch.std(input_hat, dim=(-2, -1))
-
-        #std_penalty = torch.mean((1 / (std_pred + 1e-8))
-        std_penalty_T = torch.mean((std_pred_T - std_input_T)**2)
-        std_penalty_F = torch.mean((std_pred_F - std_input_F)**2)
-        std_penalty = torch.mean((std_input - std_pred)**2)
-        #mean_penalty = torch.mean((mean_pred)**2)
-
-        return std_penalty, std_penalty_T, std_penalty_F
-
     def training_step(self, batch, batch_idx):
         # Logica di training
         x, labels = batch
