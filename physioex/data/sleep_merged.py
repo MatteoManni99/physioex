@@ -34,8 +34,12 @@ equivalent_picks.update({"sleep_physionet_EEG": "EEG", "sleep_physionet_EOG": "E
 equivalent_picks.update({"shhs_EEG": "EEG", "shhs_EOG": "EOG", "shhs_EMG": "EMG"})
 equivalent_picks.update({"mass_EEG": "EEG", "mass_EOG": "EOG", "mass_EMG": "EMG"})
 
-datasets_to_merge = ["sleep_physionet", "dreem", "dreem", "mass"]
-versions_to_merge = [ "2018", "dodh", "dodo", "_"]
+# datasets_to_merge = ["sleep_physionet", "dreem", "dreem", "mass", "shhs"]
+# versions_to_merge = [ "2018", "dodh", "dodo", "_", "_"]
+# datasets_to_merge = ["sleep_physionet", "dreem", "dreem"]
+# versions_to_merge = [ "2018", "dodh", "dodo"]
+datasets_to_merge = ["sleep_physionet"]
+versions_to_merge = [ "2018"]
 
 class SleepMerged(PhysioExDataset):
     def __init__(

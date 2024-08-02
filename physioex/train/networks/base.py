@@ -10,7 +10,7 @@ from pytorch_metric_learning.distances import CosineSimilarity
 from pytorch_metric_learning.reducers import ThresholdReducer
 from pytorch_metric_learning.regularizers import LpRegularizer
 import torch.nn.functional as Fun
-from physioex.train.networks.utils.loss import Reconstruction
+from physioex.train.networks.utils.loss import Reconstruction, CrossEntropyLoss
 
 class SleepModule(pl.LightningModule):
     def __init__(self, nn: nn.Module, config: Dict):
@@ -309,14 +309,14 @@ class SleepAutoEncoderModule(pl.LightningModule):
             mse = self.loss(inputs, input_hat)
         
         std_penalty, std_penalty_T, std_penalty_F = self.std_penalty(inputs, input_hat)
-        loss_tot = 2 * mse + 0.5 * std_penalty + 0.5 * std_penalty_T + 0.5 * std_penalty_F
+        tot_loss = 2 * mse + 0.5 * std_penalty + 0.5 * std_penalty_T + 0.5 * std_penalty_F
 
         self.log(f"{log}_loss", mse, prog_bar=True)
-        self.log(f"{log}_loss_tot", loss_tot, prog_bar=True)
-        self.log(f"{log}_std_penalty", std_penalty, prog_bar=True)
-        self.log(f"{log}_std_penalty_T", std_penalty_T, prog_bar=True)
-        self.log(f"{log}_std_penalty_F", std_penalty_F, prog_bar=True)
-        return loss_tot
+        self.log(f"{log}_tot_loss", tot_loss, prog_bar=True)
+        self.log(f"{log}_std_pen", std_penalty, prog_bar=True)
+        self.log(f"{log}_std_pen_T", std_penalty_T, prog_bar=True)
+        self.log(f"{log}_std_pen_F", std_penalty_F, prog_bar=True)
+        return tot_loss
         
     def training_step(self, batch, batch_idx):
         # Logica di training
@@ -335,6 +335,106 @@ class SleepAutoEncoderModule(pl.LightningModule):
         x, labels = batch
         x_hat = self.forward(x)
         return self.compute_loss(x, x_hat, log="test")
+    
+    def configure_optimizers(self):
+        self.opt = optim.Adam(
+            self.nn.parameters(),
+            lr=1e-4,
+            weight_decay=1e-3,
+        )
+
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            self.opt,
+            mode="max",
+            factor=0.5,
+            patience=10,
+            threshold=0.0001,
+            threshold_mode="rel",
+            cooldown=0,
+            min_lr=0,
+            eps=1e-08,
+            verbose=True,
+        )
+
+        return {
+            "optimizer": self.opt,
+            "lr_scheduler": {"scheduler": self.scheduler, "monitor": "val_loss"},
+        }
+    
+class SleepAEPrototypeModule(pl.LightningModule):
+    def __init__(self, nn: nn.Module, config: Dict):
+        super(SleepAEPrototypeModule, self).__init__()
+        self.nn = nn
+        self.module_config = config
+        self.central_epoch = int((config["seq_len"] - 1) / 2)
+        self.mse = config["loss_call"]
+        self.std_penalty = Reconstruction().std_penalty
+        self.cel = CrossEntropyLoss()
+        self.l1 = config["lambda1"]
+        self.l2 = config["lambda2"]
+        self.l3 = config["lambda3"]
+        self.l4 = config["lambda4"]
+        self.f1 = tm.F1Score(
+                task="multiclass", num_classes=config["n_classes"], average="weighted"
+            )
+        
+    def forward(self, x):
+        return self.nn(x)
+
+    def compute_loss(
+        self,
+        inputs,
+        inputs_hat,
+        embeddings,
+        labels,
+        pred,
+        log: str = "train",
+    ):
+        inputs = inputs[:, self.central_epoch, 0, :, :]
+        inputs_hat = inputs_hat[:, self.central_epoch, 0, :, :]
+        embeddings = embeddings[:, self.central_epoch, :]
+        labels = labels[:, self.central_epoch]
+        
+        cel = self.cel(None, pred, labels)
+        
+        mse = self.mse(inputs, inputs_hat)
+        std_penalty, std_penalty_T, std_penalty_F = self.std_penalty(inputs, inputs_hat)
+        reconstruction_loss = 1 * mse + 0.1 * std_penalty + 0.3 * std_penalty_T + 0.1 * std_penalty_F
+
+        r1 = torch.mean(torch.min(torch.cdist(self.nn.classifier.prototypes, embeddings), dim=1).values)
+        r2 = torch.mean(torch.min(torch.cdist(embeddings, self.nn.classifier.prototypes), dim=1).values)
+        
+        tot_loss = self.l1 * cel + self.l2 * reconstruction_loss + self.l3 * r1 + self.l4 * r2
+
+        self.log(f"{log}_loss", tot_loss, prog_bar=True)
+        self.log(f"{log}_cel", cel, prog_bar=True)
+        self.log(f"{log}_f1", self.f1(pred, labels), prog_bar=True)
+        self.log(f"{log}_r1", r1, prog_bar=True)
+        self.log(f"{log}_r2", r2, prog_bar=True)
+        self.log(f"{log}_reconstr_loss", reconstruction_loss, prog_bar=True)
+        self.log(f"{log}_mse", mse, prog_bar=True)
+        self.log(f"{log}_std_pen", std_penalty, prog_bar=True)
+        self.log(f"{log}_std_pen_T", std_penalty_T, prog_bar=True)
+        self.log(f"{log}_std_pen_F", std_penalty_F, prog_bar=True)
+        return tot_loss
+        
+    def training_step(self, batch, batch_idx):
+        # Logica di training
+        x, labels = batch
+        x_hat, embeddings, pred = self.forward(x)
+        return self.compute_loss(x, x_hat, embeddings, labels, pred)
+
+    def validation_step(self, batch, batch_idx):
+        # Logica di validazione
+        x, labels = batch
+        x_hat, embeddings, pred = self.forward(x)
+        return self.compute_loss(x, x_hat, embeddings, labels, pred, log="val")
+
+    def test_step(self, batch, batch_idx):
+        # Logica di training
+        x, labels = batch
+        x_hat, embeddings, pred = self.forward(x)
+        return self.compute_loss(x, x_hat, embeddings, labels, pred, log="test")
     
     def configure_optimizers(self):
         self.opt = optim.Adam(

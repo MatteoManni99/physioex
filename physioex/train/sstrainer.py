@@ -85,8 +85,7 @@ class SelfSupervisedTrainer:
 
         self.module_config["loss_call"] = loss_config[loss_name]
         self.module_config["loss_name"] = loss_name
-
-        #self.module_config["loss_params"] = dict()
+        self.module_config["loss_params"] = dict()
 
     def train_evaluate(self, fold: int = 0):
 

@@ -32,7 +32,7 @@ class SleepEDF(PhysioExDataset):
         input_shape = [3, 3000] if preprocessing == "raw" else [3, 29, 129]
 
         super().__init__(
-            dataset_folder=os.path.join(get_data_folder(), "mne_data"),
+            dataset_folder=os.path.join(get_data_folder(), "mne_data1"),
             preprocessing=preprocessing,
             input_shape=input_shape,
             sequence_length=sequence_length,
