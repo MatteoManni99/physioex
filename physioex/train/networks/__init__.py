@@ -63,26 +63,31 @@ config = {
         "module_config": read_config("ae_fullyconnected"),
         "module": AutoEncoderFullyConnected,
         "input_transform": "xsleepnet",
+        "target_transform": None,
     },
     "ae_conv3d": {
         "module_config": read_config("ae_conv3d"),
         "module": AutoEncoderConv3D,
         "input_transform": "xsleepnet",
+        "target_transform": None,
     },
     "ae_seqsleepnet": {
         "module_config": read_config("ae_seqsleepnet"),
         "module": AutoEncoderSeqSleepNet,
         "input_transform": "xsleepnet",
+        "target_transform": None,
     },
     "vae_seqsleepnet": {
         "module_config": read_config("vae_seqsleepnet"),
         "module": VAESeqSleepNet,
         "input_transform": "xsleepnet",
+        "target_transform": None,
     },
     "protoae_seqsleepnet": {
         "module_config": read_config("protoae_seqsleepnet"),
         "module": PrototypeAESeqSleepNet,
         "input_transform": "xsleepnet",
+        "target_transform": None,
     },
 }
 

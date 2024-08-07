@@ -5,7 +5,6 @@ from pathlib import Path
 import yaml
 from loguru import logger
 
-from physioex.data import register_dataset, set_data_folder
 from physioex.train import SelfSupervisedTrainer
 from physioex.train.networks import config, register_experiment
 
@@ -39,21 +38,21 @@ def main():
     parser.add_argument(
         "-d",
         "--dataset",
-        default="sleep_physionet",
+        default="mass",
         type=str,
         help='Specify the dataset to use. Expected type: str. Default: "SleepPhysionet"',
     )
     parser.add_argument(
         "-v",
         "--version",
-        default="2018",
+        default=None,
         type=str,
         help='Specify the version of the dataset. Expected type: str. Default: "2018"',
     )
     parser.add_argument(
         "-p",
         "--picks",
-        default="Fpz-Cz",
+        default="EEG",
         type=str,
         help="Specify the signal electrodes to pick to train the model. Expected type: list. Default: 'Fpz-Cz'",
     )
@@ -90,20 +89,12 @@ def main():
         help="Specify the batch size for training. Expected type: int. Default: 32",
     )
 
-    parser.add_argument(
-        "-nj",
-        "--n_jobs",
-        default=10,
-        type=int,
-        help="Specify the number of jobs for parallelization. Expected type: int. Default: 10",
-    )
-
     # parser.add_argument(
-    #     "-imb",
-    #     "--imbalance",
-    #     default=False,
-    #     type=bool,
-    #     help="Specify rather or not to use f1 score instead of accuracy to save the checkpoints. Expected type: bool. Default: False",
+    #     "-nj",
+    #     "--n_jobs",
+    #     default=10,
+    #     type=int,
+    #     help="Specify the number of jobs for parallelization. Expected type: int. Default: 10",
     # )
     
     parser.add_argument(
@@ -114,6 +105,24 @@ def main():
         required=False,
         help="The absolute path of the directory where the physioex dataset are stored, if None the home directory is used. Expected type: str. Optional. Default: None",
     )
+
+    parser.add_argument(
+        "--config",
+        "-c",
+        type=str,
+        required=False,
+        help="Path to the configuration file in YAML format",
+    )
+
+    parser.add_argument(
+        "--random_fold",
+        "-rf",
+        type=bool,
+        default=False,
+        required=False,
+        help="Weather or not to perform the training on a random fold. Expected type: bool. Optional. Default: False",
+    )
+
     parser.add_argument(
         "-pc",
         "--penalty_change",
@@ -124,44 +133,43 @@ def main():
 
     args = parser.parse_args()
     
-    if args.data_folder is not None:
-        # check if the path in args is a valid path
-        if not Path(args.data_folder).exists():
-            logger.warning(
-                f"Path {args.data_folder} does not exist. Trying to create it."
-            )
-            try:
-                Path(args.data_folder).mkdir(parents=True, exist_ok=True)
-            except Exception as e:
-                logger.error(f"Could not create the path {args.data_folder}.")
-                logger.error(f"Error: {e}")
-                return
-
-        set_data_folder(args.data_folder)
-        logger.info(f"Data folder set to {args.data_folder}")
-
+    if args.config:
+        with open(args.config, 'r') as file:
+            config = yaml.safe_load(file)
+            # Override command line arguments with config file values
+            for key, value in config.items():
+                if hasattr(args, key):
+                    setattr(args, key, value)
+                    
     # check if the experiment is a yaml file
     if args.experiment.endswith(".yaml") or args.experiment.endswith(".yml"):
         args.experiment = register_experiment(args.experiment)
 
     # check if the dataset is a yaml file
-    if args.dataset.endswith(".yaml") or args.dataset.endswith(".yml"):
-        args.dataset = register_dataset(args.dataset)
+
+    # convert the datasets into a list by diving by " "
+    datasets = args.dataset.split(" ")
+    versions = args.version.split(" ") if args.version is not None else None
+    picks = args.picks.split(" ")
+    
+    print(datasets)
+    print(versions)
 
     SelfSupervisedTrainer(
         model_name=args.experiment,
-        dataset_name=args.dataset,
+        datasets=datasets,
+        versions = versions,
         ckp_path=args.checkpoint,
+        data_folder=args.data_folder,
         loss_name=args.loss,
-        version=args.version,
-        picks=args.picks,
+        selected_channels= picks,
         sequence_length=args.sequence_length,
         max_epoch=args.max_epoch,
         val_check_interval=args.val_check_interval,
         batch_size=args.batch_size,
-        n_jobs=args.n_jobs,
+        #n_jobs=args.n_jobs,
+        random_fold = args.random_fold,
         penalty_change=args.penalty_change,
-        #imbalance=args.imbalance,
     ).run()
 
 
