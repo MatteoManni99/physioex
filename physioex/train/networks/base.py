@@ -374,6 +374,7 @@ class SleepAEPrototypeModule(pl.LightningModule):
         self.l2 = config["lambda2"]
         self.l3 = config["lambda3"]
         self.l4 = config["lambda4"]
+        #self.l5 = config["lambda5"]
         self.f1 = tm.F1Score(
                 task="multiclass", num_classes=config["n_classes"], average="weighted"
             )
@@ -403,14 +404,30 @@ class SleepAEPrototypeModule(pl.LightningModule):
 
         r1 = torch.mean(torch.min(torch.cdist(self.nn.classifier.prototypes, embeddings), dim=1).values)
         r2 = torch.mean(torch.min(torch.cdist(embeddings, self.nn.classifier.prototypes), dim=1).values)
-        
-        tot_loss = self.l1 * cel + self.l2 * reconstruction_loss + self.l3 * r1 + self.l4 * r2
+        #----------------------------------
+        # min_distances, closest_prototypes = torch.min(torch.cdist(embeddings, self.nn.classifier.prototypes), dim=1)
+        # prototype_counts = torch.bincount(closest_prototypes, minlength=self.nn.classifier.prototypes.size(0))
+        # mean_count = prototype_counts.float().mean()
+        # abs_std = (abs(prototype_counts.float() - mean_count)).mean()
+        # r2 = torch.mean(min_distances)
+        #r3 = abs_std
+        #----------------------------------
+        #r3
+        # proto_distances = torch.cdist(self.nn.classifier.prototypes, self.nn.classifier.prototypes)
+        # mask = torch.eye(proto_distances.size(0), device=proto_distances.device)
+        # proto_distances = proto_distances.masked_fill(mask.bool(), float('inf'))
+        # min_distances, _ = torch.min(proto_distances, dim=1)
+        # log_min_distances = torch.log(min_distances + 1 + 1e-8)
+        # r3 = - torch.mean(log_min_distances)
+    
+        tot_loss = self.l1 * cel + self.l2 * reconstruction_loss + self.l3 * r1 + self.l4 * r2 #+ self.l5 * r3
 
         self.log(f"{log}_loss", tot_loss, prog_bar=True)
         self.log(f"{log}_cel", cel, prog_bar=True)
         self.log(f"{log}_f1", self.f1(pred, labels), prog_bar=True)
         self.log(f"{log}_r1", r1, prog_bar=True)
         self.log(f"{log}_r2", r2, prog_bar=True)
+        #self.log(f"{log}_r3", r3, prog_bar=True)
         self.log(f"{log}_reconstr_loss", reconstruction_loss, prog_bar=True)
         self.log(f"{log}_mse", mse, prog_bar=True)
         self.log(f"{log}_std_pen", std_penalty, prog_bar=True)
@@ -437,6 +454,101 @@ class SleepAEPrototypeModule(pl.LightningModule):
         return self.compute_loss(x, x_hat, embeddings, labels, pred, log="test")
     
     def configure_optimizers(self):
+        self.opt = optim.Adam(
+            self.nn.parameters(),
+            lr=1e-4,
+            weight_decay=1e-3,
+        )
+
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            self.opt,
+            mode="max",
+            factor=0.5,
+            patience=10,
+            threshold=0.0001,
+            threshold_mode="rel",
+            cooldown=0,
+            min_lr=0,
+            eps=1e-08,
+            verbose=True,
+        )
+
+        return {
+            "optimizer": self.opt,
+            "lr_scheduler": {"scheduler": self.scheduler, "monitor": "val_loss"},
+        }
+
+class SleepWrapperModule(pl.LightningModule):
+    def __init__(self, nn: nn.Module, config: Dict):
+        super(SleepWrapperModule, self).__init__()
+        self.save_hyperparameters()
+        self.nn = nn
+
+        self.n_classes = config["n_classes"]
+
+        # classification experiment
+        self.acc = tm.Accuracy(
+            task="multiclass", num_classes=config["n_classes"], average="weighted"
+        )
+        self.f1 = tm.F1Score(
+            task="multiclass", num_classes=config["n_classes"], average="weighted"
+        )
+        self.loss = config["loss_call"](config["loss_params"])
+        self.module_config = config
+
+
+    def forward(self, x, y):
+        return self.nn(x, y)
+
+    def encode(self, x, y):
+        return self.nn.encode(x, y)
+
+    def compute_loss(
+        self,
+        embeddings,
+        outputs,
+        targets,
+        log: str = "train",
+    ):
+        # print(targets.size())
+        batch_size, seq_len, n_class = outputs.size()
+        
+        embeddings = embeddings.reshape(batch_size * seq_len, -1)
+        outputs = outputs.reshape(-1, n_class)
+        targets = targets.reshape(-1)
+        
+        loss = self.loss(embeddings, outputs, targets)
+
+        self.log(f"{log}_loss", loss, prog_bar=True)
+        self.log(f"{log}_acc", self.acc(outputs, targets), prog_bar=True)
+        self.log(f"{log}_f1", self.f1(outputs, targets), prog_bar=True)
+
+        return loss
+
+    def training_step(self, batch, batch_idx):
+        # Logica di training
+        inputs, targets = batch
+        embeddings, outputs = self.encode(inputs, targets)
+
+        return self.compute_loss(embeddings, outputs, targets)
+
+    def validation_step(self, batch, batch_idx):
+        # Logica di validazione
+        inputs, targets = batch
+        embeddings, outputs = self.encode(inputs, targets)
+
+        return self.compute_loss(embeddings, outputs, targets, "val")
+
+    def test_step(self, batch, batch_idx):
+        # Logica di training
+        inputs, targets = batch
+
+        embeddings, outputs = self.encode(inputs, targets)
+
+        return self.compute_loss(embeddings, outputs, targets, "test")
+    
+    def configure_optimizers(self):
+        # Definisci il tuo ottimizzatore
         self.opt = optim.Adam(
             self.nn.parameters(),
             lr=1e-4,

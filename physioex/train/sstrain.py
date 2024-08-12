@@ -26,6 +26,15 @@ def main():
         type=str,
         help="Specify where to save the checkpoint. Expected type: str. Default: None",
     )
+
+    parser.add_argument(
+        "-cr",
+        "--checkpoint_resume",
+        default=None,
+        type=str,
+        help="Specify the checkpoint to resume training. Expected type: str. Default: None",
+    )
+
     parser.add_argument(
         "-l",
         "--loss",
@@ -170,6 +179,7 @@ def main():
         #n_jobs=args.n_jobs,
         random_fold = args.random_fold,
         penalty_change=args.penalty_change,
+        resume_from_checkpoint = args.checkpoint_resume
     ).run()
 
 

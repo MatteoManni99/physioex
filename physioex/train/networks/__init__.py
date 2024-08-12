@@ -16,6 +16,7 @@ from physioex.train.networks.ae_conv3d import AutoEncoderConv3D
 from physioex.train.networks.ae_seqsleepnet import AutoEncoderSeqSleepNet
 from physioex.train.networks.vae_seqsleepnet import VAESeqSleepNet
 from physioex.train.networks.protoae_seqsleepnet import PrototypeAESeqSleepNet
+from physioex.train.networks.wrapper import Wrapper
 # from physioex.train.networks.seqecgnet import SeqECGnet
 
 
@@ -86,6 +87,12 @@ config = {
     "protoae_seqsleepnet": {
         "module_config": read_config("protoae_seqsleepnet"),
         "module": PrototypeAESeqSleepNet,
+        "input_transform": "xsleepnet",
+        "target_transform": None,
+    },
+    "wrapper": {
+        "module_config": read_config("wrapper"),
+        "module": Wrapper,
         "input_transform": "xsleepnet",
         "target_transform": None,
     },

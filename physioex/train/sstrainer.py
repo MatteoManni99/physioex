@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 import uuid
 from pathlib import Path
@@ -42,6 +42,7 @@ class SelfSupervisedTrainer:
         val_check_interval: int = 3,
         #n_jobs: int = 10,
         penalty_change: bool = False,
+        resume_from_checkpoint: Optional[str] = None
     ):
         ###### module setup ######
         network_config = get_config()[model_name]
@@ -106,6 +107,8 @@ class SelfSupervisedTrainer:
 
         self.ckp_path = ckp_path if ckp_path is not None else "models/" + str(uuid.uuid4()) + "/"
         Path(self.ckp_path).mkdir(parents=True, exist_ok=True)
+
+        self.resume_from_checkpoint = resume_from_checkpoint
         
         #############################
 
@@ -138,7 +141,7 @@ class SelfSupervisedTrainer:
         )
         
         ###### module setup ######
-
+        print("self.model_call: ", self.model_call)
         module = self.model_call(module_config=self.module_config)
 
         ###### trainer setup ######
@@ -177,7 +180,8 @@ class SelfSupervisedTrainer:
 
         logger.info("JOB:%d-Training model" % fold)
         # Addestra il modello utilizzando il trainer e il DataModule
-        trainer.fit(module, datamodule=train_datamodule)
+        
+        trainer.fit(module, datamodule=train_datamodule, ckpt_path=self.resume_from_checkpoint)
 
         logger.info("JOB:%d-Evaluating model" % fold)
         val_results = trainer.test(
