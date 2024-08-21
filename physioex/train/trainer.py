@@ -79,7 +79,7 @@ class Trainer:
             data_folder=data_folder,
         ).__len__() // batch_size
         
-        val_check_interval = max(1, num_steps // val_check_interval)
+        #val_check_interval = max(1, num_steps // val_check_interval)
         
         self.datasets = datasets
         self.versions = versions

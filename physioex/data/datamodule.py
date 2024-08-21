@@ -49,7 +49,8 @@ class PhysioExDataModule(pl.LightningDataModule):
         self.train_idx, self.valid_idx, self.test_idx = self.dataset.get_sets()
 
         #self.num_workers = os.cpu_count() // 2
-        self.num_workers = os.cpu_count()
+        #self.num_workers = os.cpu_count()
+        self.num_workers = 8
 
     def setup(self, stage: str):
         return

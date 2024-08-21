@@ -263,7 +263,7 @@ class PhysioExDataset(torch.utils.data.Dataset):
 
                 indices = np.arange(
                     start=start_index, stop=start_index + num_windows
-                ).astype(np.uint16)
+                ).astype(np.uint32)
 
                 start_index += num_windows
 

@@ -378,7 +378,9 @@ class SleepAEPrototypeModule(pl.LightningModule):
         self.f1 = tm.F1Score(
                 task="multiclass", num_classes=config["n_classes"], average="weighted"
             )
-        
+        self.mf1 = tm.F1Score(
+            task="multiclass", num_classes=config["n_classes"], average="macro"
+        )
     def forward(self, x):
         return self.nn(x)
 
@@ -425,6 +427,7 @@ class SleepAEPrototypeModule(pl.LightningModule):
         self.log(f"{log}_loss", tot_loss, prog_bar=True)
         self.log(f"{log}_cel", cel, prog_bar=True)
         self.log(f"{log}_f1", self.f1(pred, labels), prog_bar=True)
+        self.log(f"{log}_mf1", self.mf1(pred, labels), prog_bar=True)
         self.log(f"{log}_r1", r1, prog_bar=True)
         self.log(f"{log}_r2", r2, prog_bar=True)
         #self.log(f"{log}_r3", r3, prog_bar=True)
@@ -481,7 +484,7 @@ class SleepAEPrototypeModule(pl.LightningModule):
 class SleepWrapperModule(pl.LightningModule):
     def __init__(self, nn: nn.Module, config: Dict):
         super(SleepWrapperModule, self).__init__()
-        self.save_hyperparameters()
+        #self.save_hyperparameters()
         self.nn = nn
 
         self.n_classes = config["n_classes"]
