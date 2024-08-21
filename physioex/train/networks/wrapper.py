@@ -30,19 +30,27 @@ class Net(nn.Module):
         self.F = int(module_config["F"])
         self.nchan = int(module_config["in_channels"])
        
-        self.prototypes = nn.Parameter(torch.randn(self.n_prototypes, self.nchan, self.T, self.F))
-        
+        self.prototypes = nn.Parameter(torch.zeros(self.n_prototypes, self.nchan, self.T, self.F))
+        #self.prototypes debug version
+        # self.prototypes = torch.randn(self.n_prototypes, self.nchan, self.T, self.F)
+        # for i in range(self.n_prototypes):
+        #     self.prototypes[i] = nn.Parameter(torch.ones(self.nchan, self.T, self.F)*i)
         #self.central_epoch = int((self.L - 1) / 2)
 
+
     def encode(self, inputs, labels):
+        #print("PROTOTYPES:", self.prototypes.size())
         batch_size = inputs.size(0)
         proto_batch = torch.zeros(batch_size, self.L, self.nchan, self.T, self.F).to(inputs.device)
-        print("LABELS SIZE", labels.size())
 
-        for batch, label_epochs in enumerate(labels):
+        for batch_idx, label_epochs in enumerate(labels):
+            #offset to pick up the right prototype
+            offset = batch_idx%self.n_proto_per_class*self.n_classes
             for epoch, label in enumerate(label_epochs):
-                proto_batch[batch][epoch] = self.prototypes[label]
+                proto_batch[batch_idx][epoch] = self.prototypes[label + offset]
 
+        print("LABLES", labels[0])
+        print("PROTO_BATCH:", proto_batch[0])
         emb, pred = self.wrapped_model.encode(proto_batch)
         
         return emb, pred
@@ -63,7 +71,7 @@ class Net(nn.Module):
         self.wrapped_model = SeqSleepNet.load_from_checkpoint(
             checkpoint_path = module_config["model_path"],
             module_config=module_config
-        ).to(torch.device("cuda" if torch.cuda.is_available() else "cpu")).train()
+        ).to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
         print(self.wrapped_model.device)
         for param in self.wrapped_model.parameters():
             param.requires_grad = False
