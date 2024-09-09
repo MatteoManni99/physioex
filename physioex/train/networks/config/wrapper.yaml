@@ -1,7 +1,9 @@
 # Wrapper configuration
-model_name: protoae_seqsleepnet
-model_path: /home/manni/models/seqsleepnet_to_wrap/fold=-1-epoch=0-step=1607-val_acc=0.80.ckpt
+model_name: seqsleepnet
+model_path: /home/manni/models/seqsleepnet_mass_l3_eeg_to_wrap/fold=-1-epoch=7-step=12872-val_loss=0.63.ckpt
 n_proto_per_class: 2
+lambda1: 0.01
+lambda2: 10
 
 # Wrapped module configuration
 n_classes: 5

@@ -75,8 +75,8 @@ class SleepModule(pl.LightningModule):
             "scheduler": scheduler,
             "name": "lr_scheduler",
             "monitor": "val_loss",
-            "interval": "step",
-            "frequency": 1000,
+            "interval": "epoch",
+            "frequency": 1,
         }
         return [ self.opt ] , [ scheduler ]
 
@@ -498,13 +498,21 @@ class SleepWrapperModule(pl.LightningModule):
         self.nn = nn
 
         self.n_classes = config["n_classes"]
+        self.n_proto_per_class = config["n_proto_per_class"]
+        self.triangular_number = (self.n_proto_per_class - 1) * (self.n_proto_per_class) / 2
+        self.lambda1 = config["lambda1"]
+        self.lambda2 = config["lambda2"]
 
+        self.proto_indices = [[j * self.n_classes + i for j in range(self.n_proto_per_class)] for i in range(self.n_classes)]
         # classification experiment
         self.acc = tm.Accuracy(
             task="multiclass", num_classes=config["n_classes"], average="weighted"
         )
-        self.f1 = tm.F1Score(
+        self.wf1 = tm.F1Score(
             task="multiclass", num_classes=config["n_classes"], average="weighted"
+        )
+        self.mf1 = tm.F1Score(
+            task="multiclass", num_classes=config["n_classes"], average="macro"
         )
         self.loss = config["loss_call"](config["loss_params"])
         self.module_config = config
@@ -526,17 +534,35 @@ class SleepWrapperModule(pl.LightningModule):
         # print(targets.size())
         batch_size, seq_len, n_class = outputs.size()
         
-        embeddings = embeddings.reshape(batch_size * seq_len, -1)
+        input_emb, proto_emb = embeddings
+
+        input_emb = input_emb.reshape(batch_size * seq_len, -1)
         outputs = outputs.reshape(-1, n_class)
         targets = targets.reshape(-1)
         
-        loss = self.loss(embeddings, outputs, targets)
+        pdist = 0
+        if self.n_proto_per_class >1:
+            for idices in self.proto_indices:
+                #s_emb = torch.unsqueeze(proto_emb[idices].view(1, 2, -1), 0)
+                s_emb = proto_emb[idices].view(1, self.n_proto_per_class, -1)
+                dist_matrix = torch.cdist(s_emb, s_emb, 2)
+                pdist += torch.log((torch.triu(dist_matrix, diagonal=1).sum()/self.triangular_number) + 1)
 
-        self.log(f"{log}_loss", loss, prog_bar=True)
+        std_dev = torch.mean(torch.std(self.nn.prototypes, dim=(-3, -2, -1)))
+        std_loss = torch.abs(std_dev - 0.9)
+
+        cel = self.loss(input_emb, outputs, targets)
+        tot_loss = cel + self.lambda2 * std_loss - self.lambda1 * pdist
+
+        self.log(f"{log}_loss", tot_loss, prog_bar=True)
+        self.log(f"{log}_cel", cel, prog_bar=True)
+        self.log(f"{log}_pdist", pdist, prog_bar=True)
+        self.log(f"{log}_std_loss", std_loss, prog_bar=True)
         self.log(f"{log}_acc", self.acc(outputs, targets), prog_bar=True)
-        self.log(f"{log}_f1", self.f1(outputs, targets), prog_bar=True)
+        self.log(f"{log}_wf1", self.wf1(outputs, targets), prog_bar=True)
+        self.log(f"{log}_mf1", self.mf1(outputs, targets), prog_bar=True)
 
-        return loss
+        return tot_loss
 
     def training_step(self, batch, batch_idx):
         # Logica di training

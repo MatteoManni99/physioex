@@ -30,7 +30,7 @@ class Net(nn.Module):
         self.F = int(module_config["F"])
         self.nchan = int(module_config["in_channels"])
        
-        self.prototypes = nn.Parameter(torch.zeros(self.n_prototypes, self.nchan, self.T, self.F))
+        self.prototypes = nn.Parameter(torch.rand(self.n_prototypes, self.nchan, self.T, self.F))
         #self.prototypes debug version
         # self.prototypes = torch.randn(self.n_prototypes, self.nchan, self.T, self.F)
         # for i in range(self.n_prototypes):
@@ -40,20 +40,26 @@ class Net(nn.Module):
 
     def encode(self, inputs, labels):
         #print("PROTOTYPES:", self.prototypes.size())
-        batch_size = inputs.size(0)
-        proto_batch = torch.zeros(batch_size, self.L, self.nchan, self.T, self.F).to(inputs.device)
+        batch_size = labels.size(0)
+        proto_batch = torch.zeros(batch_size, self.L, self.nchan, self.T, self.F).to(labels.device)
 
         for batch_idx, label_epochs in enumerate(labels):
             #offset to pick up the right prototype
             offset = batch_idx%self.n_proto_per_class*self.n_classes
-            for epoch, label in enumerate(label_epochs):
-                proto_batch[batch_idx][epoch] = self.prototypes[label + offset]
+            for epoch_idx, label in enumerate(label_epochs):
+                proto_batch[batch_idx][epoch_idx] = self.prototypes[label + offset]
 
-        print("LABLES", labels[0])
-        print("PROTO_BATCH:", proto_batch[0])
         emb, pred = self.wrapped_model.encode(proto_batch)
-        
-        return emb, pred
+
+        # proto_to_embed = torch.zeros(self.n_prototypes, self.L, self.nchan, self.T, self.F).to(labels.device)
+        # for i in range(self.n_prototypes):
+        #     proto_to_embed[i] = self.prototypes[i].repeat(3, 1, 1, 1)
+        # proto_emb, _ = self.wrapped_model.encode(proto_to_embed)
+
+        proto_to_embed = self.prototypes.unsqueeze(1).repeat(1, 3, 1, 1, 1)
+        proto_emb, _ = self.wrapped_model.encode(proto_to_embed)
+
+        return (emb, proto_emb) , pred
 
     def forward(self, inputs, labels):
         emb, pred = self.encode(inputs, labels)

@@ -4,7 +4,7 @@ n_prototypes: 15
 lambda1: 3
 lambda2: 6
 lambda3: 1
-lambda4: 1
+lambda4: 3
 #lambda5: 0.5
 
 n_classes: 5
