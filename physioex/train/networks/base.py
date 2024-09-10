@@ -546,13 +546,14 @@ class SleepWrapperModule(pl.LightningModule):
                 #s_emb = torch.unsqueeze(proto_emb[idices].view(1, 2, -1), 0)
                 s_emb = proto_emb[idices].view(1, self.n_proto_per_class, -1)
                 dist_matrix = torch.cdist(s_emb, s_emb, 2)
-                pdist += torch.log((torch.triu(dist_matrix, diagonal=1).sum()/self.triangular_number) + 1)
+                pdist += 1/(torch.log((torch.triu(dist_matrix, diagonal=1).sum()/self.triangular_number) + 1))
 
+        print(torch.std(self.nn.prototypes, dim=(-3, -2, -1)))
         std_dev = torch.mean(torch.std(self.nn.prototypes, dim=(-3, -2, -1)))
         std_loss = torch.abs(std_dev - 0.9)
 
         cel = self.loss(input_emb, outputs, targets)
-        tot_loss = cel + self.lambda2 * std_loss - self.lambda1 * pdist
+        tot_loss = cel + self.lambda1 * pdist + self.lambda2 * std_loss
 
         self.log(f"{log}_loss", tot_loss, prog_bar=True)
         self.log(f"{log}_cel", cel, prog_bar=True)
@@ -590,7 +591,7 @@ class SleepWrapperModule(pl.LightningModule):
         # Definisci il tuo ottimizzatore
         self.opt = optim.Adam(
             self.nn.parameters(),
-            lr=1e-4,
+            lr=1e-3,
             weight_decay=1e-3,
         )
 
