@@ -540,24 +540,24 @@ class SleepWrapperModule(pl.LightningModule):
         outputs = outputs.reshape(-1, n_class)
         targets = targets.reshape(-1)
         
-        pdist = 0
+        proto_self_sim = 0
         if self.n_proto_per_class >1:
             for idices in self.proto_indices:
                 #s_emb = torch.unsqueeze(proto_emb[idices].view(1, 2, -1), 0)
                 s_emb = proto_emb[idices].view(1, self.n_proto_per_class, -1)
                 dist_matrix = torch.cdist(s_emb, s_emb, 2)
-                pdist += 1/(torch.log((torch.triu(dist_matrix, diagonal=1).sum()/self.triangular_number) + 1))
+                proto_self_sim += 1/(torch.log((torch.triu(dist_matrix, diagonal=1).sum()/self.triangular_number) + 1))
 
-        print(torch.std(self.nn.prototypes, dim=(-3, -2, -1)))
-        std_dev = torch.mean(torch.std(self.nn.prototypes, dim=(-3, -2, -1)))
+        
+        std_dev = torch.mean(torch.std(self.nn.prototypes, dim=(-2, -1)))
         std_loss = torch.abs(std_dev - 0.9)
 
         cel = self.loss(input_emb, outputs, targets)
-        tot_loss = cel + self.lambda1 * pdist + self.lambda2 * std_loss
+        tot_loss = cel + self.lambda1 * proto_self_sim + self.lambda2 * std_loss
 
         self.log(f"{log}_loss", tot_loss, prog_bar=True)
         self.log(f"{log}_cel", cel, prog_bar=True)
-        self.log(f"{log}_pdist", pdist, prog_bar=True)
+        self.log(f"{log}_proto_self_sim", proto_self_sim, prog_bar=True)
         self.log(f"{log}_std_loss", std_loss, prog_bar=True)
         self.log(f"{log}_acc", self.acc(outputs, targets), prog_bar=True)
         self.log(f"{log}_wf1", self.wf1(outputs, targets), prog_bar=True)
@@ -591,7 +591,7 @@ class SleepWrapperModule(pl.LightningModule):
         # Definisci il tuo ottimizzatore
         self.opt = optim.Adam(
             self.nn.parameters(),
-            lr=1e-3,
+            lr=1e-4,
             weight_decay=1e-3,
         )
 

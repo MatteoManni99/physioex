@@ -2,9 +2,8 @@
 model_name: seqsleepnet
 model_path: /home/manni/models/seqsleepnet_mass_l3_eeg_to_wrap/fold=-1-epoch=7-step=12872-val_loss=0.63.ckpt
 n_proto_per_class: 3
-lambda1: 0.05
-lambda2: 10
-lambda3: 0.01
+lambda1: 0.04
+lambda2: 20
 
 # Wrapped module configuration
 n_classes: 5

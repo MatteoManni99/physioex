@@ -1,10 +1,10 @@
 latent_dim: 32
 n_prototypes: 15
 
-lambda1: 3
+lambda1: 6
 lambda2: 6
 lambda3: 1
-lambda4: 3
+lambda4: 2
 #lambda5: 0.5
 
 n_classes: 5

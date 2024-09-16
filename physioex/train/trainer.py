@@ -133,11 +133,11 @@ class Trainer:
         
         # Definizione delle callback
         checkpoint_callback = ModelCheckpoint(
-            monitor="val_acc",
+            monitor="val_loss",
             save_top_k=1,
-            mode="max",
+            mode="min",
             dirpath=self.ckp_path,
-            filename="fold=%d-{epoch}-{step}-{val_acc:.2f}" % fold,
+            filename="fold=%d-{epoch}-{step}-{val_loss:.2f}" % fold,
             save_weights_only=False,
         )
 
