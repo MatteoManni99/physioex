@@ -12,7 +12,10 @@ wandb
 
 physioex/train/old/
 
+/old_models/
 /models/
+/protos/
+/concept_labeling/
 script
 temp 
 lightning_logs
