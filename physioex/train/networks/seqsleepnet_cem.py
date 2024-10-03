@@ -18,73 +18,72 @@ class SeqSleepNetCEM(SleepModule):
 
         self.n_classes = module_config["n_classes"]
         self.n_concept = module_config["n_concept"]
-        self.class_division = eval(module_config["class_division"]) if module_config.get("class_division") is not None else None
-        #alpha is the parameter for the concept loss scaling in the end_to_end training
         self.alpha = float(module_config["alpha"])
 
-        #defining loss and measures for concepts
-        self.loss_cocept = CrossEntropyLoss(module_config["loss_params"])
-        self.acc_concept = tm.Accuracy(
-            task="multiclass", num_classes=self.n_concept#, average="weighted"
-        )
-        self.f1_concept = tm.F1Score(
-            task="multiclass", num_classes=self.n_concept#, average="weighted"
-        )
-        self.ck_concept = tm.CohenKappa(task="multiclass", num_classes=self.n_concept)
-        self.pr_concept = tm.Precision(
-            task="multiclass", num_classes=self.n_concept#, average="weighted"
-        )
-        self.rc_concept = tm.Recall(
-            task="multiclass", num_classes=self.n_concept#, average="weighted"
-        )
-        
         #defining loss and measures for classes
-        self.loss = CrossEntropyLoss(module_config["loss_params"])
-        self.acc_target = self.acc
-        self.f1_target = self.f1
-        self.ck_target = self.ck
-        self.pr_target = self.pr
-        self.rc_target = self.rc
+        self.loss_class = CrossEntropyLoss(module_config["loss_params"])
+        self.acc_class = tm.Accuracy(task="multiclass", num_classes=self.n_classes)
+        self.wf1_class = tm.F1Score(task="multiclass", num_classes=self.n_classes, average="weighted")
+        self.mf1_class = tm.F1Score(task="multiclass", num_classes=self.n_classes, average="macro")
+        self.ck_class = tm.CohenKappa(task="multiclass", num_classes=self.n_classes)
+        self.pr_class = tm.Precision(task="multiclass", num_classes=self.n_classes)
+        self.rc_class = tm.Recall(task="multiclass", num_classes=self.n_classes)
+
+        #defining loss and measures for concepts
+        self.mse = nn.MSELoss()
+        self.loss_concept = nn.L1Loss()
+        # self.acc_concept = tm.Accuracy(task="multiclass", num_classes=self.n_concept)
+        # self.wf1_concept = tm.F1Score(task="multiclass", num_classes=self.n_concept, average="weighted")
+        # self.mf1_concept = tm.F1Score(task="multiclass", num_classes=self.n_concept, average="macro")
+        # self.ck_concept = tm.CohenKappa(task="multiclass", num_classes=self.n_concept)
+        # self.pr_concept = tm.Precision(task="multiclass", num_classes=self.n_concept)
+        # self.rc_concept = tm.Recall(task="multiclass", num_classes=self.n_concept)   
 
     def compute_loss(
         self,
-        concepts,
+        embeddings,
         outputs,
         targets,
         log: str = "train",
         log_metrics: bool = False,
     ):
-        #concepts[0] = concepts_embedding; concepts[1] = concepts_activations
-        activations = concepts[1]
-        activations = activations.reshape(-1, self.n_concept)
-        targets = targets.reshape(-1)
-        act_targets = targets
-        loss_concept = self.loss_cocept(None, activations, act_targets)
-        outputs = outputs.reshape(-1, self.n_classes)
+        epoch_emb, concept_emb = embeddings
+        outputs_concept, outputs_class = outputs
+        targets_class, targets_concept = targets
 
-        if self.n_classes > 2:
-            class_targets = targets
-        else:
-            #Binary case
-            if(self.class_division != None):
-                class_targets = torch.tensor([0 if t in self.class_division[0] else 1 for t in targets]).to('cuda')
-            else:
-                print("class division is None")
+        outputs_concept = outputs_concept[:, 1, :].squeeze() #1 perché prendo l'epoca centrale
+        
+        # print("outputs_class:", outputs_class.shape)
+        # print(outputs_class[0][0])
+        # print("outputs_concept:", outputs_concept.shape)
+        # print(outputs_concept[0])
+        # print("targets concept", targets_concept.shape)
+        # print(targets_concept[0])
+        # print("targets class", targets_class.shape)
+        # print(targets_class[0][0])
 
-        loss_target = self.loss(None, outputs, class_targets)
-        self.log_function(log, log_metrics, loss_concept, loss_target, activations, outputs, act_targets, class_targets)
+        outputs_class = outputs_class.reshape(-1, self.n_classes)
+        targets_class = targets_class.reshape(-1)
+        loss_class = self.loss_class(None, outputs_class, targets_class)
 
-        return self.alpha * loss_concept + loss_target
-    
-    def log_function (self, log, log_metrics, loss_concept , loss_target, activations, outputs, act_targets, targets):
-        self.log(f"{log}_loss_target", loss_target, prog_bar=True)
+        loss_concept = self.loss_concept(outputs_concept, targets_concept)
+        loss = loss_class + self.alpha * loss_concept
+
+        self.log(f"{log}_loss_class", loss_class, prog_bar=True)
+        self.log(f"{log}_acc", self.acc_class(outputs_class, targets_class), prog_bar=True)
+        self.log(f"{log}_mf1", self.mf1_class(outputs_class, targets_class), prog_bar=True)
+        
         self.log(f"{log}_loss_concept", loss_concept, prog_bar=True)
-        self.log(f"{log}_acc", self.acc_target(outputs, targets))
-        self.log(f"{log}_acc_concept", self.acc_concept(activations, act_targets))
-        self.log(f"{log}_f1", self.f1_target(outputs, targets))
-        self.log(f"{log}_f1_concept", self.f1_concept(activations, act_targets))
-        if log_metrics:
-            None
+        self.log(f"{log}_mse_concept", self.mse(outputs_concept, targets_concept), prog_bar=True)
+
+        self.log(f"{log}_loss", loss, prog_bar=True)
+
+        if(log_metrics):
+            self.log(f"{log}_ck", self.ck_class(outputs_class, targets_class), prog_bar=True)
+            self.log(f"{log}_pr", self.pr_class(outputs_class, targets_class), prog_bar=True)
+            self.log(f"{log}_rc", self.rc_class(outputs_class, targets_class), prog_bar=True)
+
+        return loss
 
 
 class Net(nn.Module):
@@ -104,11 +103,13 @@ class Net(nn.Module):
 
         x = x.reshape(batch, L, -1)
 
-        embeddings, activations = self.sequence_encoder_cem.encode(x)
+        epoch_emb, concept_emb, concept_act = self.sequence_encoder_cem.encode(x)
+        # print(concept_act.shape)
+        # print(concept_emb.shape)
 
-        y = self.sequence_encoder_cem.clf(embeddings)
+        y = self.sequence_encoder_cem.clf(concept_emb)
 
-        return (embeddings, activations), y
+        return (epoch_emb, concept_emb), (concept_act, y)
 
     def forward(self, x):
         x, y = self.encode(x)
@@ -132,8 +133,8 @@ class SequenceEncoderCEM(SequenceEncoder):
 
     def encode(self, x):
         x = super().encode(x)
-        embedding, activations = self.cem(x)
-        return embedding, activations
+        concept_emb, activations = self.cem(x)
+        return x, concept_emb, activations
 
 
 class CEM(nn.Module):

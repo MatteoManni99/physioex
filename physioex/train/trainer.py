@@ -122,6 +122,7 @@ class Trainer:
             data_folder=self.data_folder,
             preprocessing = self.preprocessing,
             target_transform= self.target_transform,
+            path_concept_targets = "/home/manni/physioex/shhs_to_mass_inv10000_concept_targets.npy"
         )
         
         ###### module setup ######

@@ -23,11 +23,10 @@ input_processing: xsleepnet
 
 #previews parameters are shared with seqsleepnet.yaml
 
-n_concept: 5
-concept_dim: 8
-#set class_division only if you are in a binary classification problem and in the dataset there are more then 2 classes
-#example class_division: ((0,), (1, 2, 3, 4)) it will merge 1, 2, 3, 4 classes in a single class
-class_division: ((0,), (1, 2, 3, 4))
+n_concept: 15
+concept_dim: 2
+#class_division example: ((0,), (1, 2, 3, 4)) it will merge 1, 2, 3, 4 classes in a single class
+#class_division: ((0,), (1, 2, 3, 4))
 #training_type: 'end_to_end'
-alpha: 1.0
+alpha: 30
 

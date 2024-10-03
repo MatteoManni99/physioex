@@ -36,10 +36,10 @@ class SleepModule(pl.LightningModule):
             )
             self.ck = tm.CohenKappa(task="multiclass", num_classes=config["n_classes"])
             self.pr = tm.Precision(
-                task="multiclass", num_classes=config["n_classes"], average="weighted"
+                task="multiclass", num_classes=config["n_classes"]#, average="weighted"
             )
             self.rc = tm.Recall(
-                task="multiclass", num_classes=config["n_classes"], average="weighted"
+                task="multiclass", num_classes=config["n_classes"]#, average="weighted"
             )
         elif self.n_classes == 1:
             # regression experiment
@@ -299,6 +299,11 @@ class SleepAutoEncoderModule(pl.LightningModule):
             self.loss = config["loss_call"]
             self.std_penalty = Reconstruction().std_penalty
         
+        self.alpha1 = config["alpha1"]
+        self.alpha2 = config["alpha2"]
+        self.alpha3 = config["alpha3"]
+        self.alpha4 = config["alpha4"]
+        
     def forward(self, x):
         return self.nn(x)
 
@@ -319,14 +324,14 @@ class SleepAutoEncoderModule(pl.LightningModule):
             mse = self.loss(inputs, input_hat)
         
         std_penalty, std_penalty_T, std_penalty_F = self.std_penalty(inputs, input_hat)
-        tot_loss = 2 * mse + 0.5 * std_penalty + 0.5 * std_penalty_T + 0.5 * std_penalty_F
+        loss = self.alpha1*mse + self.alpha2*std_penalty + self.alpha3*std_penalty_T + self.alpha4*std_penalty_F
 
-        self.log(f"{log}_loss", mse, prog_bar=True)
-        self.log(f"{log}_tot_loss", tot_loss, prog_bar=True)
+        self.log(f"{log}_mse", mse, prog_bar=True)
+        self.log(f"{log}_loss", loss, prog_bar=True)
         self.log(f"{log}_std_pen", std_penalty, prog_bar=True)
         self.log(f"{log}_std_pen_T", std_penalty_T, prog_bar=True)
         self.log(f"{log}_std_pen_F", std_penalty_F, prog_bar=True)
-        return tot_loss
+        return loss
         
     def training_step(self, batch, batch_idx):
         # Logica di training
