@@ -16,6 +16,14 @@ physioex/train/old/
 /models/
 /protos/
 /concept_labeling/
+
+hpc/
+/papers
+/models/
+/hpc
+/mlp
+**/.future
+
 script
 temp 
 lightning_logs

@@ -1,13 +1,11 @@
-import importlib
+import os
 
 import pkg_resources as pkg
 import yaml
-from loguru import logger
 
-import physioex as physioex
-import physioex.train.networks.utils.target_transform as target_transform
 from physioex.train.networks.chambon2018 import Chambon2018Net
 from physioex.train.networks.seqsleepnet import SeqSleepNet
+#------------ROBA VECCHIA----------------
 from physioex.train.networks.seqsleepnet_cem import SeqSleepNetCEM
 from physioex.train.networks.sleeptransformer import SleepTransformer
 from physioex.train.networks.tinysleepnet import TinySleepNet
@@ -138,3 +136,16 @@ def register_experiment(experiment: str = None):
         config[experiment_name]["target_transform"] = None
 
     return experiment_name
+#------------------------FINE ROBA VECCHIA---------------------
+
+from physioex.train.networks.tinysleepnet import TinySleepNet
+
+config_file = pkg.resource_filename(
+    "physioex", os.path.join("train", "networks", "config.yaml")
+)
+if not os.path.exists(config_file):
+    raise FileNotFoundError(f"Network configuration file not found: {config_file}")
+
+
+with open(config_file, "r") as file:
+    config = yaml.safe_load(file)
