@@ -34,6 +34,8 @@ def train_script():
             if parser["checkpoint_dir"] is not None
             else os.path.join("models", str(uuid.uuid4()))
         ),
+        "checkpoint_metric": parser["checkpoint_metric"],
+        "checkpoint_metric_mode": parser["checkpoint_metric_mode"],
         "max_epochs": parser["max_epoch"],
         "num_nodes": parser["num_nodes"],
         "resume": True,

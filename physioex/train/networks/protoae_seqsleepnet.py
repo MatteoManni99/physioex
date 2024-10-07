@@ -5,21 +5,119 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from physioex.train.networks.base import SleepAEPrototypeModule
+from physioex.train.networks.base import SelfSupervisedSleepModule
 from physioex.train.networks.seqsleepnet import EpochEncoder, SequenceEncoder
+from physioex.train.networks.utils.loss import SemiSupervisedLoss
+import torchmetrics as tm
 
 module_config = dict()
 
 
-class PrototypeAESeqSleepNet(SleepAEPrototypeModule):
+class PrototypeAESeqSleepNet(SelfSupervisedSleepModule):
     def __init__(self, module_config=module_config):
-        super(PrototypeAESeqSleepNet, self).__init__(Net(module_config), module_config)
+        module_config.update(
+            {
+                "T": 29,
+                "F": 129,
+                "D": 32,
+                "nfft": 256,
+                "lowfreq": 0,
+                "highfreq": 50,
+                "seqnhidden1": 64,
+                "seqnlayer1": 1,
+                "attentionsize1": 32,
+                "seqnhidden2": 64,
+                "seqnlayer2": 1,
 
+                "latent_dim": 32,
+                "alpha1": 1.0,
+                "alpha2": 0.1,
+                "alpha3": 0.3,
+                "alpha4": 0.1,
+                "lambda1": 6,
+                "lambda2": 6,
+                "lambda3": 1,
+                "lambda4": 2,
+
+                "n_prototypes": 15,
+            }
+        )
+
+        super(PrototypeAESeqSleepNet, self).__init__(Net(module_config), module_config)
+        self.central_epoch = int((module_config["sequence_length"] - 1) / 2)
+
+        self.loss = SemiSupervisedLoss(
+            alpha1=module_config["alpha1"],
+            alpha2=module_config["alpha2"],
+            alpha3=module_config["alpha3"],
+            alpha4=module_config["alpha4"],
+            lambda1=module_config["lambda1"],
+            lambda2=module_config["lambda2"],
+            lambda3=module_config["lambda3"],
+            lambda4=module_config["lambda4"],
+        )
+        print(self.device)
+        self.factor_names = ["loss", "cel", "r1", "r2", "rec_loss", "mse", "std_pen", "std_pen_T", "std_pen_F"]
+        self.f1 = tm.F1Score(task="multiclass", num_classes=module_config["n_classes"], average="weighted")
+        self.Mf1 = tm.F1Score(task="multiclass", num_classes=module_config["n_classes"], average="macro")
+        self.metrics = [self.f1, self.Mf1]
+        self.metric_names = ["f1", "Mf1"]
+    
+    def compute_loss(
+        self,
+        inputs,
+        inputs_hat,
+        embeddings,
+        labels,
+        pred,
+        log: str = "train",
+        log_metrics: bool = False,
+    ):
+        inputs = inputs[:, self.central_epoch, 0, :, :]
+        inputs_hat = inputs_hat[:, self.central_epoch, 0, :, :]
+        embeddings = embeddings[:, self.central_epoch, :]
+        labels = labels[:, self.central_epoch]
+        
+        #loss_list = [loss, loss1, loss2, ...] where loss is the total loss
+        loss_list = self.loss(
+            embeddings,
+            self.nn.classifier.prototypes,
+            pred,
+            labels, 
+            inputs,
+            inputs_hat
+        )
+
+        #log all loss factors in the loss_list
+        for i, factor in enumerate(loss_list):
+            self.log(f"{log}_{self.factor_names[i]}", factor, prog_bar=True)
+        
+        #log the metrics if log_metrics is True and the metrics are defined 
+        if log_metrics and self.metrics is not None:
+            for i, metric in enumerate(self.metrics):
+                self.log(f"{log}_{self.metric_names[i]}", metric(pred, labels), prog_bar=True)
+        
+        return loss_list[0]
+            
+    def training_step(self, batch, batch_idx):
+        x, labels = batch
+        x_hat, embeddings, pred = self.forward(x)
+        return self.compute_loss(x, x_hat, embeddings, labels, pred)
+
+    def validation_step(self, batch, batch_idx):
+        x, labels = batch
+        x_hat, embeddings, pred = self.forward(x)
+        return self.compute_loss(x, x_hat, embeddings, labels, pred, log="val", log_metrics=True)
+
+    def test_step(self, batch, batch_idx):
+        x, labels = batch
+        x_hat, embeddings, pred = self.forward(x)
+        return self.compute_loss(x, x_hat, embeddings, labels, pred, log="test", log_metrics=True)
 
 class Net(nn.Module):
     def __init__(self, module_config=module_config):
         super().__init__()
-        self.L = module_config["seq_len"]
+        self.L = module_config["sequence_length"]
         self.nchan = module_config["in_channels"]
         self.T = module_config["T"]
         self.F = module_config["F"]
@@ -39,30 +137,20 @@ class Net(nn.Module):
         
     def encode(self, x):
         batch = x.size(0)
-        #print("input:", x.size())
         x = x.view(-1, self.nchan, self.T, self.F)
-        #print("reshape:", x.size())
         x = self.epoch_encoder(x)
-        #print("after epoch encoder:", x.size())
         x = x.view(batch, self.L, -1)
-        #print("reshape:", x.size())
         x = self.sequence_encoder.encode(x)
-        #print("after sequence encoder:", x.size())
         x = self.lin_encode(x)
         x = self.layer_norm(x)
-        #print("after lin encode:", x.size())
         return x
 
     def decode(self, x):
         batch = x.size(0) #x.shape = [b, l, latent_dim]
         x = self.lin_decode(x)
-        #print("after lin decode:", x.size())
         x = self.sequence_decoder(x)
-        #print("after sequence decoder:", x.shape)
         x = x.reshape(batch * self.L, -1) #x.shape = [b*l, 128]
-        #print("reshape:", x.size())
         x = self.epoch_decoder(x)
-        #print("after epoch decoder:", x.size())
         x = x.reshape(batch, self.L, self.nchan, self.T, self.F)
         return x
     
@@ -84,7 +172,7 @@ class Classifier(nn.Module):
         self.latent_dim = config["latent_dim"]
         self.prototypes = nn.Parameter(torch.randn(self.n_prototypes, self.latent_dim))
         self.W = nn.Linear(self.n_prototypes, self.n_classes, bias=False)
-        self.central_epoch = int((config["seq_len"] - 1) / 2)
+        self.central_epoch = int((config["sequence_length"] - 1) / 2)
         
     def forward(self, z):
         z = z[:, self.central_epoch, :]
@@ -136,28 +224,17 @@ class EpochDecoder(nn.Module):
         self.leaky_relu = nn.LeakyReLU()
 
     def forward(self, x):
-        #print(x.size())
         x = self.leaky_relu(self.fc1(x))
-        #print(x.size())
         x = x.view(-1, 8, 16)
-        #print(x.size())
         x, _ = self.gru_epoch_decoder(x) # [batch*L, T, F*nchan]
-        #print(x.size())
         forward_output = x[:, :, :16]
         backward_output = x[:, :, 16:]
         x = forward_output + backward_output
 
-        #print(x.size())
-        # Reshape per adattarsi al primo strato conv2d trasposto
         x = x.view(-1, 16, 8, 16)
-        #print(x.size())
-        # Strati convoluzionali trasposti
         x = self.leaky_relu(self.conv_transpose1(x))
-        #print("t1", x.size())
         x = self.leaky_relu(self.conv_transpose2(x))
-        #print("t2", x.size())
         x = self.conv_transpose3(x)
-        #print("t3", x.size())
         
         return x
 

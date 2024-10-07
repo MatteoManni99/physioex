@@ -171,6 +171,22 @@ class PhysioExParser:
         help="Specify the path where to store the results. Expected type: str. Default: None",
     )
 
+    parser.add_argument(
+        "-ckme",
+        "--checkpoint_metric",
+        default='val_acc',
+        type=str,
+        help="Specify the metric to be used to select the best checkpoint. Expected type: str. Default: 'val_acc'",
+    )
+
+    parser.add_argument(
+        "-ckmemo",
+        "--checkpoint_metric_mode",
+        default='max',
+        type=str,
+        help = "Specify the mode of the metric to be used to select the best checkpoint. Expected type: str. Default: 'max'"
+    )
+
     @classmethod
     def train_parser(cls) -> dict:
 

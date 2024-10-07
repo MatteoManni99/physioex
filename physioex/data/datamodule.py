@@ -20,6 +20,7 @@ class PhysioExDataModule(pl.LightningDataModule):
         data_folder: str = None,
         num_nodes: int = 1,
         num_workers: int = os.cpu_count(),
+        path_concept_targets: str = None,
     ):
         super().__init__()
 
@@ -37,12 +38,10 @@ class PhysioExDataModule(pl.LightningDataModule):
         if path_concept_targets:
             self.dataset = PhysioExDatasetConcept(
                 datasets=datasets,
-                versions=versions,
                 preprocessing=preprocessing,
                 selected_channels=selected_channels,
                 sequence_length=sequence_length,
                 target_transform=target_transform,
-                #task=task,
                 data_folder=data_folder,
                 path_concept_targets = path_concept_targets
             )

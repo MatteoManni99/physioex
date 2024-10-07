@@ -13,6 +13,41 @@ tinysleepnet:
   preprocessing : raw
   target_transform: null
 
+seqsleepnet_cem:
+  model: physioex.train.networks.seqsleepnet:SeqSleepNetCEM
+  preprocessing : xsleepnet
+  target_transform: null
+
+ae_fullyconnected:
+  model: physioex.train.networks.autoencoder:AutoEncoderFullyConnected
+  preprocessing : xsleepnet
+  target_transform: null
+
+ae_conv3d:
+  model: physioex.train.networks.autoencoder:AutoEncoderConv3D
+  preprocessing : xsleepnet
+  target_transform: null
+
+ae_seqsleepnet:
+  model: physioex.train.networks.autoencoder:AutoEncoderSeqSleepNet
+  preprocessing : xsleepnet
+  target_transform: null
+
+vae_seqsleepnet:
+  model: physioex.train.networks.autoencoder:VAESeqSleepNet
+  preprocessing : xsleepnet
+  target_transform: null
+
+protoae_seqsleepnet:
+  model: physioex.train.networks.autoencoder:PrototypeAESeqSleepNet
+  preprocessing : xsleepnet
+  target_transform: null
+
+wrapper:
+  model: physioex.train.networks.wrapper:Wrapper
+  preprocessing : xsleepnet
+  target_transform: null
+
 default:
   model : null
 

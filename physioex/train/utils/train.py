@@ -30,6 +30,8 @@ def train(
     max_epochs: int = 10,
     num_nodes: int = 1,
     resume: bool = True,
+    checkpoint_metric: str = None,
+    checkpoint_metric_mode: str = None,
 ) -> str:
 
     seed_everything(42, workers=True)
@@ -92,11 +94,11 @@ def train(
 
     ########### Callbacks ############
     checkpoint_callback = ModelCheckpoint(
-        monitor="val_acc",
+        monitor=checkpoint_metric,
         save_top_k=1,
-        mode="max",
+        mode=checkpoint_metric_mode,
         dirpath=checkpoint_path,
-        filename="fold=%d{epoch}-{step}-{val_acc:.2f}" % fold,
+        filename="fold=%d{epoch}-{step}-{%s:.2f}" % (fold, checkpoint_metric),
         save_weights_only=False,
     )
     # progress_bar_callback = RichProgressBar()

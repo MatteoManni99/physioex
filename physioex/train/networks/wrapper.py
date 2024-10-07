@@ -5,17 +5,108 @@ import torch.nn as nn
 import torch.optim as optim
 from pytorch_lightning.utilities.types import OptimizerLRScheduler
 
-from physioex.train.networks.base import SleepWrapperModule
+from physioex.train.networks.base import SleepModule
 from physioex.train.networks.seqsleepnet import SeqSleepNet
-
+import torchmetrics as tm
 
 module_config = dict()
 
-class Wrapper(SleepWrapperModule):
+class Wrapper(SleepModule):
     def __init__(self, module_config=module_config):
+        module_config.update(
+            {
+                "T": 29,
+                "F": 129,
+                "D": 32,
+                "nfft": 256,
+                "lowfreq": 0,
+                "highfreq": 50,
+                "seqnhidden1": 64,
+                "seqnlayer1": 1,
+                "attentionsize1": 32,
+                "seqnhidden2": 64,
+                "seqnlayer2": 1,
+
+                "n_classes": 5,
+                "n_proto_per_class": 3,
+                "lambda1": 0.04,
+                "lambda2": 20,
+                "model_path": "/home/manni/models/seqsleepnet_mass_l3_eeg_to_wrap/fold=-1-epoch=7-step=12872-val_loss=0.63.ckpt",
+            }
+        )
         super(Wrapper, self).__init__(Net(module_config), module_config)
+        self.n_classes = module_config["n_classes"]
+        self.n_proto_per_class = module_config["n_proto_per_class"]
+        self.triangular_number = (self.n_proto_per_class - 1) * (self.n_proto_per_class) / 2
+        self.lambda1 = module_config["lambda1"]
+        self.lambda2 = module_config["lambda2"]
 
+        self.proto_indices = [[j * self.n_classes + i for j in range(self.n_proto_per_class)] for i in range(self.n_classes)]
 
+        self.acc = tm.Accuracy(task="multiclass", num_classes=module_config["n_classes"], average="weighted")
+        self.wf1 = tm.F1Score(task="multiclass", num_classes=module_config["n_classes"], average="weighted")
+        self.Mf1 = tm.F1Score(task="multiclass", num_classes=module_config["n_classes"], average="macro")
+
+    def forward(self, x, y):
+        return self.nn(x, y)
+
+    def encode(self, x, y):
+        return self.nn.encode(x, y)
+
+    def compute_loss(
+        self,
+        embeddings,
+        outputs,
+        targets,
+        log: str = "train",
+    ):
+        batch_size, seq_len, n_class = outputs.size()
+        
+        input_emb, proto_emb = embeddings
+
+        input_emb = input_emb.reshape(batch_size * seq_len, -1)
+        outputs = outputs.reshape(-1, n_class)
+        targets = targets.reshape(-1)
+        
+        proto_self_sim = 0
+        if self.n_proto_per_class >1:
+            for idices in self.proto_indices:
+                s_emb = proto_emb[idices].view(1, self.n_proto_per_class, -1)
+                dist_matrix = torch.cdist(s_emb, s_emb, 2)
+                proto_self_sim += 1/(torch.log((torch.triu(dist_matrix, diagonal=1).sum()/self.triangular_number) + 1))
+
+        
+        std_dev = torch.mean(torch.std(self.nn.prototypes, dim=(-2, -1)))
+        std_loss = torch.abs(std_dev - 0.9)
+
+        cel = self.loss(None, outputs, targets)
+        tot_loss = cel + self.lambda1 * proto_self_sim + self.lambda2 * std_loss
+
+        self.log(f"{log}_loss", tot_loss, prog_bar=True)
+        self.log(f"{log}_cel", cel, prog_bar=True)
+        self.log(f"{log}_proto_self_sim", proto_self_sim, prog_bar=True)
+        self.log(f"{log}_std_loss", std_loss, prog_bar=True)
+        self.log(f"{log}_acc", self.acc(outputs, targets), prog_bar=True)
+        self.log(f"{log}_wf1", self.wf1(outputs, targets), prog_bar=True)
+        self.log(f"{log}_Mf1", self.Mf1(outputs, targets), prog_bar=True)
+
+        return tot_loss
+    
+    def training_step(self, batch, batch_idx):
+        inputs, targets = batch
+        embeddings, outputs = self.encode(inputs, targets)
+        return self.compute_loss(embeddings, outputs, targets)
+
+    def validation_step(self, batch, batch_idx):
+        inputs, targets = batch
+        embeddings, outputs = self.encode(inputs, targets)
+        return self.compute_loss(embeddings, outputs, targets, "val")
+
+    def test_step(self, batch, batch_idx):
+        inputs, targets = batch
+        embeddings, outputs = self.encode(inputs, targets)
+        return self.compute_loss(embeddings, outputs, targets, "test")
+    
 class Net(nn.Module):
     def __init__(self, module_config=module_config):
         super().__init__()
@@ -25,21 +116,15 @@ class Net(nn.Module):
         self.n_classes = module_config["n_classes"]
         self.n_prototypes = self.n_proto_per_class * self.n_classes
 
-        self.L = int(module_config["seq_len"])
+        self.L = int(module_config["sequence_length"])
         self.T = int(module_config["T"])
         self.F = int(module_config["F"])
         self.nchan = int(module_config["in_channels"])
        
         self.prototypes = nn.Parameter(torch.rand(self.n_prototypes, self.nchan, self.T, self.F))
-        #self.prototypes debug version
-        # self.prototypes = torch.randn(self.n_prototypes, self.nchan, self.T, self.F)
-        # for i in range(self.n_prototypes):
-        #     self.prototypes[i] = nn.Parameter(torch.ones(self.nchan, self.T, self.F)*i)
-        #self.central_epoch = int((self.L - 1) / 2)
 
 
     def encode(self, inputs, labels):
-        #print("PROTOTYPES:", self.prototypes.size())
         batch_size = labels.size(0)
         proto_batch = torch.zeros(batch_size, self.L, self.nchan, self.T, self.F).to(labels.device)
 
@@ -51,12 +136,7 @@ class Net(nn.Module):
 
         emb, pred = self.wrapped_model.encode(proto_batch)
 
-        # proto_to_embed = torch.zeros(self.n_prototypes, self.L, self.nchan, self.T, self.F).to(labels.device)
-        # for i in range(self.n_prototypes):
-        #     proto_to_embed[i] = self.prototypes[i].repeat(3, 1, 1, 1)
-        # proto_emb, _ = self.wrapped_model.encode(proto_to_embed)
-
-        proto_to_embed = self.prototypes.unsqueeze(1).repeat(1, 3, 1, 1, 1)
+        proto_to_embed = self.prototypes.unsqueeze(1).repeat(1, self.L, 1, 1, 1)
         proto_emb, _ = self.wrapped_model.encode(proto_to_embed)
 
         return (emb, proto_emb) , pred
@@ -66,14 +146,6 @@ class Net(nn.Module):
         return pred
     
     def load_and_freeze_model(self, module_config):
-        # self.wrapped_model = load_pretrained_model(
-        #     name=module_config["model_name"],
-        #     in_channels=module_config["in_channels"],
-        #     sequence_length=module_config["seq_len"],
-        #     softmax=False,
-        #     loss = "cel",
-        #     ckpt_path=module_config["ckpt_path"],
-        # ).eval()
         self.wrapped_model = SeqSleepNet.load_from_checkpoint(
             checkpoint_path = module_config["model_path"],
             module_config=module_config

@@ -156,23 +156,24 @@ class PhysioExDatasetConcept(PhysioExDataset):
     def __init__(
         self,
         datasets: List[str],
-        versions: List[str] = None,
+        data_folder: str = None,
         preprocessing: str = "raw",
         selected_channels: List[int] = ["EEG"],
         sequence_length: int = 21,
         target_transform: Callable = None,
-        #task: str = "sleep",
-        data_folder: str = None,
+        hpc: bool = False,
+        indexed_channels: List[int] = ["EEG", "EOG", "EMG", "ECG"],
         path_concept_targets: str = None,
     ):
         super().__init__(
             datasets,
-            versions,
+            data_folder,
             preprocessing,
             selected_channels,
             sequence_length,
             target_transform,
-            data_folder,
+            hpc,
+            indexed_channels
         )
         self.concepts = np.load(path_concept_targets).astype(np.float32)
 

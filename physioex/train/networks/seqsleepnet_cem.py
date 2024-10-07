@@ -32,12 +32,7 @@ class SeqSleepNetCEM(SleepModule):
         #defining loss and measures for concepts
         self.mse = nn.MSELoss()
         self.loss_concept = nn.L1Loss()
-        # self.acc_concept = tm.Accuracy(task="multiclass", num_classes=self.n_concept)
-        # self.wf1_concept = tm.F1Score(task="multiclass", num_classes=self.n_concept, average="weighted")
-        # self.mf1_concept = tm.F1Score(task="multiclass", num_classes=self.n_concept, average="macro")
-        # self.ck_concept = tm.CohenKappa(task="multiclass", num_classes=self.n_concept)
-        # self.pr_concept = tm.Precision(task="multiclass", num_classes=self.n_concept)
-        # self.rc_concept = tm.Recall(task="multiclass", num_classes=self.n_concept)   
+        
 
     def compute_loss(
         self,
@@ -51,16 +46,7 @@ class SeqSleepNetCEM(SleepModule):
         outputs_concept, outputs_class = outputs
         targets_class, targets_concept = targets
 
-        outputs_concept = outputs_concept[:, 1, :].squeeze() #1 perché prendo l'epoca centrale
-        
-        # print("outputs_class:", outputs_class.shape)
-        # print(outputs_class[0][0])
-        # print("outputs_concept:", outputs_concept.shape)
-        # print(outputs_concept[0])
-        # print("targets concept", targets_concept.shape)
-        # print(targets_concept[0])
-        # print("targets class", targets_class.shape)
-        # print(targets_class[0][0])
+        outputs_concept = outputs_concept[:, 1, :].squeeze() #1 is the central epoch in the sequence of 3
 
         outputs_class = outputs_class.reshape(-1, self.n_classes)
         targets_class = targets_class.reshape(-1)
