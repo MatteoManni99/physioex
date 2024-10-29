@@ -47,6 +47,36 @@ wrapper:
   model: physioex.train.networks.wrapper:Wrapper
   preprocessing : xsleepnet
   target_transform: null
+  
+seqsexnet:
+  model: physioex.train.networks.seqsexnet:SeqSexNet
+  preprocessing : raw
+  target_transform: null
+  model_kwargs:
+    learning_rate : .000001
+    weight_decay :  .0000001
+    n_classes: 2
+
+seqagenet:
+  model: physioex.train.networks.seqsexnet:SeqAgeNet
+  preprocessing : raw
+  target_transform: null
+  model_kwargs:
+    learning_rate : .001
+    weight_decay :  .00001
+    n_classes: 1
+    loss : physioex.train.networks.utils.loss:RegressionLoss
+
+
+wholeagenet:
+  model: physioex.train.networks.seqsexnet:WholeNightAgeNet
+  preprocessing : xsleepnet
+  target_transform: null
+  model_kwargs:
+    learning_rate : .001
+    weight_decay :  .00001
+    n_classes: 1
+    loss : physioex.train.networks.utils.loss:RegressionLoss
 
 default:
   model : null
@@ -54,7 +84,7 @@ default:
   model_kwargs : 
     n_classes: 5
     sf : 100
-    n_channels: null
+    in_channels: null
     sequence_length : null
   
     loss: physioex.train.networks.utils.loss:CrossEntropyLoss
@@ -62,7 +92,6 @@ default:
 
     learning_rate : .0001
     weight_decay :  .000001
-  
   preprocessing : null
   target_transform : null
 

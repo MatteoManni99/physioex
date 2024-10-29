@@ -133,19 +133,25 @@ class WeightedMSELoss(nn.Module, PhysioExLoss):
         mse_last_freq = mse_loss[..., self.border_frequency:]
         return mse_loss.mean(), mse_first_freq.mean(), mse_last_freq.mean(), weighted_mse_loss.mean()
 
-class RegressionLoss(nn.Module, PhysioExLoss):
+class HuberLoss(nn.Module):
     def __init__(self):
         super(RegressionLoss, self).__init__()
-        self.mae_loss = nn.L1Loss()
+
+        self.loss = nn.HuberLoss(delta=5)
 
     def forward(self, emb, preds, targets):
-        mae = self.mae_loss(preds, targets)
-        ss_tot = torch.sum((targets - torch.mean(targets)) ** 2)
-        ss_res = torch.sum((targets - preds) ** 2)
-        r2_score = 1 - ss_res / ss_tot
+        return self.loss(preds, targets) / 112.5
 
-        combined_loss = 0.5 * mae + 0.5 * (1 - r2_score)
-        return combined_loss
+
+class RegressionLoss(nn.Module):
+    def __init__(self):
+        super(RegressionLoss, self).__init__()
+
+        # mse
+        self.loss = nn.MSELoss()
+
+    def forward(self, emb, preds, targets):
+        return self.loss(preds, targets)
 
 
 config = {"cel": CrossEntropyLoss, "scl": SimilarityCombinedLoss, "reg": RegressionLoss, "mse": nn.MSELoss(reduction="mean"), "w_mse": WeightedMSELoss}

@@ -16,6 +16,7 @@ class PhysioExDataModule(pl.LightningDataModule):
         selected_channels: List[int] = ["EEG"],
         sequence_length: int = 21,
         target_transform: Callable = None,
+        task: str = "sleep",
         folds: Union[int, List[int]] = -1,
         data_folder: str = None,
         num_nodes: int = 1,
@@ -35,6 +36,7 @@ class PhysioExDataModule(pl.LightningDataModule):
             target_transform=target_transform,
             data_folder=data_folder,
             concepts=concepts,
+            task=task,
         )
 
         self.batch_size = batch_size

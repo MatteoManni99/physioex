@@ -23,6 +23,7 @@ class PhysioExDataset(torch.utils.data.Dataset):
         hpc: bool = False,
         indexed_channels: List[int] = ["EEG", "EOG", "EMG", "ECG"],
         concepts: bool = False,
+        task: str = "sleep",
     ):
         self.datasets = datasets
         self.L = sequence_length
@@ -43,6 +44,7 @@ class PhysioExDataset(torch.utils.data.Dataset):
                 offset=offset,
                 hpc=hpc,
                 concepts=concepts,
+                task=task,
             )
             offset += len(reader)
 
@@ -122,8 +124,8 @@ class PhysioExDataset(torch.utils.data.Dataset):
         for table in self.tables:
             for _, row in table.iterrows():
 
-                num_windows = row["num_windows"] - self.L + 1
-
+                num_windows = max( row["num_windows"] - self.L, 0 ) + 1 
+                                
                 indices = np.arange(
                     start=start_index, stop=start_index + num_windows
                 ).astype(np.uint32)

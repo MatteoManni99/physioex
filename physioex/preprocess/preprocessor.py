@@ -11,7 +11,6 @@ from loguru import logger
 from tqdm import tqdm
 
 from physioex.preprocess.utils.signal import OnlineVariance
-from physioex.utils import get_data_folder, set_data_folder
 
 
 class Preprocessor:
@@ -50,10 +49,6 @@ class Preprocessor:
         assert (
             len(preprocessors_name) == len(preprocessors) == len(preprocessors_shape)
         ), "ERR: lists preprocessors_name, preprocessors e preprocessors_shape should match first dimension"
-
-        self.data_folder = (
-            get_data_folder() if data_folder is None else set_data_folder(data_folder)
-        )
 
         self.data_folder = data_folder
 
