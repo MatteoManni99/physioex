@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from physioex.train.networks.base import SelfSupervisedSleepModule
+from physioex.train.networks.selfsupervised import SelfSupervisedSleepModule
 from physioex.train.networks.seqsleepnet import EpochEncoder, SequenceEncoder
 from physioex.train.networks.utils.loss import SemiSupervisedLoss
 import torchmetrics as tm
@@ -56,8 +56,8 @@ class PrototypeAESeqSleepNet(SelfSupervisedSleepModule):
             lambda3=module_config["lambda3"],
             lambda4=module_config["lambda4"],
         )
-        print(self.device)
-        self.factor_names = ["loss", "cel", "r1", "r2", "rec_loss", "mse", "std_pen", "std_pen_T", "std_pen_F"]
+        
+        self.loss_factor_names = ["loss", "cel", "r1", "r2", "rec_loss", "mse", "std_pen", "std_pen_T", "std_pen_F"]
         self.f1 = tm.F1Score(task="multiclass", num_classes=module_config["n_classes"], average="weighted")
         self.Mf1 = tm.F1Score(task="multiclass", num_classes=module_config["n_classes"], average="macro")
         self.metrics = [self.f1, self.Mf1]
@@ -90,7 +90,7 @@ class PrototypeAESeqSleepNet(SelfSupervisedSleepModule):
 
         #log all loss factors in the loss_list
         for i, factor in enumerate(loss_list):
-            self.log(f"{log}_{self.factor_names[i]}", factor, prog_bar=True)
+            self.log(f"{log}_{self.loss_factor_names[i]}", factor, prog_bar=True)
         
         #log the metrics if log_metrics is True and the metrics are defined 
         if log_metrics and self.metrics is not None:

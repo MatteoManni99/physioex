@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from physioex.train.networks.base import SelfSupervisedSleepModule
+from physioex.train.networks.selfsupervised import SelfSupervisedSleepModule
 from physioex.train.networks.seqsleepnet import EpochEncoder, SequenceEncoder
 from physioex.train.networks.utils.loss import ReconstructionLoss
 module_config = dict()
@@ -48,7 +48,7 @@ class VAESeqSleepNet(SelfSupervisedSleepModule):
             alpha3=module_config["alpha3"],
             alpha4=module_config["alpha4"],
         )
-        self.factor_names = ["loss", "mse", "std-pen", "std-pen-T", "std-pen-F", "kl_div"]
+        self.loss_factor_names = ["loss", "mse", "std-pen", "std-pen-T", "std-pen-F", "kl_div"]
 
     #its necessary to redefine the computer_loss method because the basic one does not support the return of mean and logvar
     def compute_loss(
@@ -101,7 +101,7 @@ class Net(nn.Module):
         self.sequence_decoder = SequenceDecoder(module_config)
         self.epoch_decoder = EpochDecoder(module_config)
 
-    def encode(self, x):
+    def encode_distribution(self, x):
         batch = x.size(0)
         x = x.reshape(-1, self.nchan, self.T, self.F)
         x = self.epoch_encoder(x)
@@ -110,6 +110,11 @@ class Net(nn.Module):
         mean = self.lin_mean(x)
         logvar = self.lin_logvar(x)
         return mean, logvar
+    
+    def encode(self, x):
+        mean, logvar = self.encode_distribution(x)
+        z = self.reparameterize(mean, logvar)
+        return z
 
     def reparameterize(self, mean, logvar):
         std = torch.exp(0.5 * logvar)
@@ -125,7 +130,7 @@ class Net(nn.Module):
         return x
 
     def forward(self, x):
-        mean, logvar = self.encode(x)
+        mean, logvar = self.encode_distribution(x)
         z = self.reparameterize(mean, logvar)
         x_reconstructed = self.decode(z)
         return z, (x_reconstructed, mean, logvar)

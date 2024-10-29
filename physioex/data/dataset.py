@@ -22,6 +22,7 @@ class PhysioExDataset(torch.utils.data.Dataset):
         target_transform: Callable = None,
         hpc: bool = False,
         indexed_channels: List[int] = ["EEG", "EOG", "EMG", "ECG"],
+        concepts: bool = False,
     ):
         self.datasets = datasets
         self.L = sequence_length
@@ -41,6 +42,7 @@ class PhysioExDataset(torch.utils.data.Dataset):
                 channels_index=self.channels_index,
                 offset=offset,
                 hpc=hpc,
+                concepts=concepts,
             )
             offset += len(reader)
 
@@ -68,8 +70,6 @@ class PhysioExDataset(torch.utils.data.Dataset):
                 num_folds = [col for col in table.columns if "fold_" in col]
                 num_folds = len(num_folds)
                 selected_fold = np.random.randint(0, num_folds)
-                selected_fold = 0
-                print(f"Selected fold for dataset {i}: {selected_fold}")
                 self.tables[i]["split"] = table[f"fold_{selected_fold}"].map(
                     {"train": 0, "valid": 1, "test": 2}
                 )
@@ -79,8 +79,6 @@ class PhysioExDataset(torch.utils.data.Dataset):
             ]
             num_folds = len(num_folds)
             selected_fold = np.random.randint(0, num_folds)
-            selected_fold = 0
-            print(f"Selected fold for dataset {i}: {selected_fold}")
             self.tables[dataset_idx]["split"] = table[f"fold_{selected_fold}"].map(
                 {"train": 0, "valid": 1, "test": 2}
             )
@@ -151,33 +149,3 @@ class PhysioExDataset(torch.utils.data.Dataset):
 
         return train_idx, valid_idx, test_idx
 
-
-class PhysioExDatasetConcept(PhysioExDataset):
-    def __init__(
-        self,
-        datasets: List[str],
-        data_folder: str = None,
-        preprocessing: str = "raw",
-        selected_channels: List[int] = ["EEG"],
-        sequence_length: int = 21,
-        target_transform: Callable = None,
-        hpc: bool = False,
-        indexed_channels: List[int] = ["EEG", "EOG", "EMG", "ECG"],
-        path_concept_targets: str = None,
-    ):
-        super().__init__(
-            datasets,
-            data_folder,
-            preprocessing,
-            selected_channels,
-            sequence_length,
-            target_transform,
-            hpc,
-            indexed_channels
-        )
-        self.concepts = np.load(path_concept_targets).astype(np.float32)
-
-    def __getitem__(self, idx):
-        X, y = super().__getitem__(idx)
-        c = self.concepts[idx]
-        return X, (y, c)

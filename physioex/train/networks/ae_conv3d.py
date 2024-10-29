@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from physioex.train.networks.base import SelfSupervisedSleepModule
+from physioex.train.networks.selfsupervised import SelfSupervisedSleepModule
 from physioex.train.networks.utils.loss import ReconstructionLoss
 
 module_config = dict()
@@ -33,7 +33,7 @@ class AutoEncoderConv3D(SelfSupervisedSleepModule):
             alpha3=module_config["alpha3"],
             alpha4=module_config["alpha4"]
         )
-        self.factor_names = ["loss", "mse", "std-pen", "std-pen-T", "std-pen-F"]
+        self.loss_factor_names = ["loss", "mse", "std-pen", "std-pen-T", "std-pen-F"]
         self.metrics = None
         self.metric_names = None
 
@@ -136,7 +136,7 @@ class Decoder(nn.Module):
         x = self.sequence_decoder(x) # [batch, 32, L, 8, 33]
         _, decoded_channels, _, decoded_T, decoded_F = x.shape # [batch, 32, L, 8, 33]
         x = x.permute(0, 2, 1, 3, 4) # [batch, L, 32, 8, 33]
-        x = x.view(-1, decoded_channels, decoded_T, decoded_F)  # [batch*L, 32, 8, 33]
+        x = x.reshape(-1, decoded_channels, decoded_T, decoded_F)  # [batch*L, 32, 8, 33]
         x = self.epoch_decoder(x) # [batch*L, channels, T, F]
         x = x.view(batch_size, L, self.nchan, self.T, self.F)  # [batch, L, channels, T, F]
         return x

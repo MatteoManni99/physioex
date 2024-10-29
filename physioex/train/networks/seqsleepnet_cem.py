@@ -14,14 +14,34 @@ module_config = dict()
 
 class SeqSleepNetCEM(SleepModule):
     def __init__(self, module_config=module_config):
+        module_config.update(
+            {
+                "T": 29,
+                "F": 129,
+                "D": 32,
+                "nfft": 256,
+                "lowfreq": 0,
+                "highfreq": 50,
+                "seqnhidden1": 64,
+                "seqnlayer1": 1,
+                "attentionsize1": 32,
+                "seqnhidden2": 64,
+                "seqnlayer2": 1,
+
+                "n_concept": 15,
+                "concept_dim": 2,
+                "alpha": 20,
+            }
+        )
+
         super(SeqSleepNetCEM, self).__init__(Net(module_config), module_config)
 
         self.n_classes = module_config["n_classes"]
         self.n_concept = module_config["n_concept"]
         self.alpha = float(module_config["alpha"])
-
+        self.central_epoch = int((module_config["sequence_length"] - 1) / 2)
         #defining loss and measures for classes
-        self.loss_class = CrossEntropyLoss(module_config["loss_params"])
+        self.loss_class = CrossEntropyLoss()
         self.acc_class = tm.Accuracy(task="multiclass", num_classes=self.n_classes)
         self.wf1_class = tm.F1Score(task="multiclass", num_classes=self.n_classes, average="weighted")
         self.mf1_class = tm.F1Score(task="multiclass", num_classes=self.n_classes, average="macro")
@@ -29,6 +49,15 @@ class SeqSleepNetCEM(SleepModule):
         self.pr_class = tm.Precision(task="multiclass", num_classes=self.n_classes)
         self.rc_class = tm.Recall(task="multiclass", num_classes=self.n_classes)
 
+        del self.wacc
+        del self.macc
+        del self.wf1
+        del self.mf1
+        del self.ck
+        del self.pr
+        del self.rc
+        del self.loss
+        
         #defining loss and measures for concepts
         self.mse = nn.MSELoss()
         self.loss_concept = nn.L1Loss()
@@ -46,7 +75,8 @@ class SeqSleepNetCEM(SleepModule):
         outputs_concept, outputs_class = outputs
         targets_class, targets_concept = targets
 
-        outputs_concept = outputs_concept[:, 1, :].squeeze() #1 is the central epoch in the sequence of 3
+        outputs_concept = outputs_concept[:, self.central_epoch, :].squeeze()
+        targets_concept = targets_concept[:, self.central_epoch, :]
 
         outputs_class = outputs_class.reshape(-1, self.n_classes)
         targets_class = targets_class.reshape(-1)
@@ -75,24 +105,15 @@ class SeqSleepNetCEM(SleepModule):
 class Net(nn.Module):
     def __init__(self, module_config=module_config):
         super().__init__()
-
         self.epoch_encoder = EpochEncoder(module_config)
         self.sequence_encoder_cem = SequenceEncoderCEM(module_config)
 
     def encode(self, x):
-
         batch, L, nchan, T, F = x.size()
-
         x = x.reshape(-1, nchan, T, F)
-
         x = self.epoch_encoder(x)
-
         x = x.reshape(batch, L, -1)
-
         epoch_emb, concept_emb, concept_act = self.sequence_encoder_cem.encode(x)
-        # print(concept_act.shape)
-        # print(concept_emb.shape)
-
         y = self.sequence_encoder_cem.clf(concept_emb)
 
         return (epoch_emb, concept_emb), (concept_act, y)
@@ -126,9 +147,7 @@ class SequenceEncoderCEM(SequenceEncoder):
 class CEM(nn.Module):
     def __init__(self, input_dim, n_concept, concept_dim):
         super().__init__()
-        # self.concept_activations = concept_activations
         self.n_concept = n_concept
-        # TODO aggiungere le altre attivazioni
         self.input2candidateConcepts = nn.ModuleList(
             [
                 nn.Sequential(nn.Linear(input_dim, concept_dim), nn.LeakyReLU())
@@ -147,7 +166,6 @@ class CEM(nn.Module):
         for i in range(self.n_concept):
             c_plus = self.input2candidateConcepts[i](x)
             c_minus = self.input2candidateConcepts[i + 1](x)
-            # TODO volendo si potrebbe fare anche la concatenazione aggiungendo un'altra dimensione
             c = torch.cat((c_plus, c_minus), 2)
             score = self.score_function(c)
             concept = score * c_plus + (1 - score) * c_minus

@@ -35,12 +35,11 @@ class MemmapReader(Reader):
         channels_index: List[int],
         offset: int,
     ):
-
         self.preprocessing = preprocessing
 
         self.data_path = os.path.join(data_folder, dataset, preprocessing)
         self.labels_path = os.path.join(data_folder, dataset, "labels")
-
+        
         self.L = sequence_length
         self.channels_index = channels_index
         self.offset = offset
@@ -95,6 +94,36 @@ class MemmapReader(Reader):
 
         return X, y
 
+class MemmapConceptReader(MemmapReader):
+    def __init__(
+        self,
+        data_folder: str,
+        dataset: str,
+        preprocessing: str,
+        sequence_length: int,
+        channels_index: List[int],
+        offset: int,
+    ):
+        super().__init__(data_folder, dataset, preprocessing, sequence_length, channels_index, offset)
+
+        #self.concepts_path = os.path.join(data_folder, dataset, "concepts")
+        self.concepts_path = os.path.join("/home/manni", "concepts")
+        self.concepts_shape = int(np.load(os.path.join(self.concepts_path, "concepts_shape.npz"))["shape"])
+
+    def __getitem__(self, idx):
+        X, y = super().__getitem__(idx)
+        
+        relative_id = self.relative_idx[idx]
+        subject_id = self.subject_idx[idx]
+        num_windows = self.windows_index[subject_id]
+
+        concepts_shape = (num_windows, self.concepts_shape)
+        concepts_path = os.path.join(self.concepts_path, str(subject_id) + ".npy")
+        concepts = np.memmap(concepts_path, dtype="float32", mode="r", shape=concepts_shape)
+        concepts = concepts[relative_id : relative_id + self.L]
+        concepts = torch.tensor(concepts).float()
+        
+        return X, (y, concepts)
 
 class H5Reader(Reader):
     def __init__(
@@ -180,16 +209,26 @@ class DataReader(Reader):
         channels_index: List[int],
         offset: int,
         hpc: bool,
+        concepts: bool,
     ):
-
-        self.reader = MemmapReader(
-            data_folder=data_folder,
-            dataset=dataset,
-            preprocessing=preprocessing,
-            sequence_length=sequence_length,
-            channels_index=channels_index,
-            offset=offset,
-        )
+        if concepts:
+            self.reader = MemmapConceptReader(
+                data_folder=data_folder,
+                dataset=dataset,
+                preprocessing=preprocessing,
+                sequence_length=sequence_length,
+                channels_index=channels_index,
+                offset=offset,
+            )
+        else:
+            self.reader = MemmapReader(
+                data_folder=data_folder,
+                dataset=dataset,
+                preprocessing=preprocessing,
+                sequence_length=sequence_length,
+                channels_index=channels_index,
+                offset=offset,
+            )
 
     def __len__(self):
         return self.reader.__len__()

@@ -172,19 +172,19 @@ class PhysioExParser:
     )
 
     parser.add_argument(
-        "-ckme",
-        "--checkpoint_metric",
+        "-mo",
+        "--monitor",
         default='val_acc',
         type=str,
-        help="Specify the metric to be used to select the best checkpoint. Expected type: str. Default: 'val_acc'",
+        help="Specify the metric to be used to select the best checkpoint. Expected type: str. Default: 'val_acc'"
     )
 
     parser.add_argument(
-        "-ckmemo",
-        "--checkpoint_metric_mode",
+        "-momo",
+        "--monitor_mode",
         default='max',
         type=str,
-        help = "Specify the mode of the metric to be used to select the best checkpoint. Expected type: str. Default: 'max'"
+        help = "Specify the mode of the monitor metric, can be 'max' or 'min'. Expected type: str. Default: 'max'"
     )
 
     @classmethod

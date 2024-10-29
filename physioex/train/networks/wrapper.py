@@ -129,7 +129,7 @@ class Net(nn.Module):
         proto_batch = torch.zeros(batch_size, self.L, self.nchan, self.T, self.F).to(labels.device)
 
         for batch_idx, label_epochs in enumerate(labels):
-            #offset to pick up the right prototype
+            #offset to select the right prototype
             offset = batch_idx%self.n_proto_per_class*self.n_classes
             for epoch_idx, label in enumerate(label_epochs):
                 proto_batch[batch_idx][epoch_idx] = self.prototypes[label + offset]

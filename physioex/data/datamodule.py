@@ -4,7 +4,7 @@ from typing import Callable, List, Union
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, DistributedSampler, Subset, SubsetRandomSampler
 
-from physioex.data.dataset import PhysioExDataset, PhysioExDatasetConcept
+from physioex.data.dataset import PhysioExDataset
 
 
 class PhysioExDataModule(pl.LightningDataModule):
@@ -20,7 +20,7 @@ class PhysioExDataModule(pl.LightningDataModule):
         data_folder: str = None,
         num_nodes: int = 1,
         num_workers: int = os.cpu_count(),
-        path_concept_targets: str = None,
+        concepts: bool = False,
     ):
         super().__init__()
 
@@ -34,17 +34,8 @@ class PhysioExDataModule(pl.LightningDataModule):
             sequence_length=sequence_length,
             target_transform=target_transform,
             data_folder=data_folder,
+            concepts=concepts,
         )
-        if path_concept_targets:
-            self.dataset = PhysioExDatasetConcept(
-                datasets=datasets,
-                preprocessing=preprocessing,
-                selected_channels=selected_channels,
-                sequence_length=sequence_length,
-                target_transform=target_transform,
-                data_folder=data_folder,
-                path_concept_targets = path_concept_targets
-            )
 
         self.batch_size = batch_size
         self.hpc = num_nodes > 1

@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from physioex.train.networks.base import SelfSupervisedSleepModule
+from physioex.train.networks.selfsupervised import SelfSupervisedSleepModule
 from physioex.train.networks.seqsleepnet import EpochEncoder, SequenceEncoder
 from physioex.train.networks.utils.loss import ReconstructionLoss
 
@@ -44,7 +44,7 @@ class AutoEncoderSeqSleepNet(SelfSupervisedSleepModule):
             alpha3=module_config["alpha3"],
             alpha4=module_config["alpha4"]
         )
-        self.factor_names = ["loss", "mse", "std-pen", "std-pen-T", "std-pen-F"]
+        self.loss_factor_names = ["loss", "mse", "std-pen", "std-pen-T", "std-pen-F"]
         self.metrics = None
         self.metric_names = None
 
