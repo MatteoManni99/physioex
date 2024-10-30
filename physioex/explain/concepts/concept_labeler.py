@@ -16,7 +16,7 @@ class ConceptLabeler:
         dataset_name: str,
         data_folder: str,
         model_class: Callable,
-        model_config: str,
+        model_config: dict,
         model_ckpt_path: str,
         channels_index: List[int],
         sequence_length: int,

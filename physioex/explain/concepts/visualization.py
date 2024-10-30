@@ -13,23 +13,40 @@ import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 import math
 
+concept_palette_protoae_shhs = [
+    "#C0C0C0",  #// 0: # light grey
+    "#CCCC00",  #// 1: dark yellow
+    "#009900",  #// 2: dark green
+    "#606060",  #// 3: grey
+    "#1E90FF",  #// 4: sky blue
+    "#A2C523",  #// 5: olive green
+    "#909090",  #// 6: grey
+    "#FF4500",  #// 7: orange red
+    "#00FF00",  #// 8: bright green
+    "#FF6347",  #// 9: tomato
+    "#0000FF",  #// 10: blue
+    "#FFA500",  #// 11: orange
+    "#66FF66",  #// 12: light green
+    "#DDA0DD",  #// 13: plum
+    "#8A2BE2"   #// 14: blue violet
+]
 
-concept_palette = [
-  "#C0C0C0",  #// 0: # light grey
-  "#CCCC00",  #// 1: dark yellow
-  "#009900",  #// 2: dark green
-  "#606060",  #// 3: grey
-  "#1E90FF",  #// 4: sky blue
-  "#A2C523",  #// 5: olive green
-  "#909090",  #// 6: grey
-  "#FF4500",  #// 7: orange red
-  "#00FF00",  #// 8: bright green
-  "#FF6347",  #// 9: tomato
-  "#0000FF",  #// 10: blue
-  "#FFA500",  #// 11: orange
-  "#66FF66",  #// 12: light green
-  "#DDA0DD",  #// 13: plum
-  "#8A2BE2"   #// 14: blue violet
+concept_palette_protoae_alldata = [
+    "#0000FF",  #// 0: blue
+    "#FFA500",  #// 1: orange
+    "#009900",  #// 2: dark green
+    "#D3D3D3",  #// 3: # light grey
+    "#1E90FF",  #// 4: sky blue
+    "#66FF66",  #// 5: light green
+    "#606060",  #// 6: grey
+    "#8A2BE2",  #// 7: blue violet
+    "#A2C523",  #// 8: olive green
+    "#DDA0DD",  #// 9: plum
+    "#C0C0C0",  #// 10: # light grey
+    "#FF4500",  #// 11: orange red
+    "#CCCC00",  #// 12: dark yellow
+    "#909090",  #// 13: grey
+    "#CC8400"   #// 14: dark orange
 ]
 
 class_palette = sns.color_palette([
@@ -43,6 +60,72 @@ sleep_stage_palette = ["#808080","#FF0000","#FFA500","#00FF00", "#0000FF"]
 colormap = LinearSegmentedColormap.from_list('colormap_name', sleep_stage_palette, N=5)
 
 def plot_pca_2d(data, colors, percentage=1, additional_points=None, num_additional_points=False, p_palette=None, title='PCA 2D', legend_title='Sleep Stages'):
+    """
+    Visualizes the data in a 2D PCA plot with options for coloring and additional points.
+
+    This function performs Principal Component Analysis (PCA) to reduce the dimensionality of the input data 
+    to two components for visualization. It allows for coloring the data points based on a given categorical 
+    variable and includes optional additional points.
+
+    Parameters:
+    ----------
+    data : numpy.ndarray or pandas.DataFrame
+        A 2D array or DataFrame containing the data points to be visualized. Each row represents 
+        an observation, and each column represents a feature.
+
+    colors : array-like
+        An array or list containing the colors for the points in the plot. This could represent 
+        different categories or labels for the data points.
+
+    percentage : float, optional
+        A value between 0 and 1 indicating the fraction of the data to be sampled for plotting. 
+        Defaults to 1, which means all data points are used.
+
+    additional_points : numpy.ndarray or pandas.DataFrame, optional
+        A 2D array or DataFrame containing additional points to be plotted on the PCA graph. 
+        Each row represents a point. Defaults to None.
+
+    num_additional_points : bool, optional
+        If set to True, each additional point will be labeled with its index. Defaults to False.
+
+    p_palette : list, optional
+        A list of colors to be used for the points in the plot. If None, a default color palette 
+        will be used. Defaults to None.
+
+    title : str, optional
+        The title of the plot. Defaults to 'PCA 2D'.
+
+    legend_title : str, optional
+        The title of the legend. Defaults to 'Sleep Stages'.
+
+    Returns:
+    -------
+    None
+        This function does not return any value. It generates and displays a plot directly.
+
+    Example:
+    --------
+    import numpy as np
+    
+    # Create a sample dataset
+    data = np.random.rand(100, 5)  # 100 samples, 5 features
+    colors = np.random.choice(['Stage 1', 'Stage 2', 'Stage 3'], size=100)  # Random sleep stages
+    
+    # Define additional points (prototypes)
+    additional_points = np.array([[0.5, 0.5, 0.5, 0.5, 0.5],
+                                   [0.2, 0.2, 0.2, 0.2, 0.2]])
+    
+    # Call the PCA plotting function
+    plot_pca_2d(data, colors, percentage=0.8, additional_points=additional_points, num_additional_points=True)
+
+    Notes:
+    ------
+    - The function requires the `scikit-learn`, `numpy`, `pandas`, `matplotlib`, and `seaborn` 
+      libraries for execution. Ensure that these libraries are installed in your environment.
+    - The scatter plot shows the data points reduced to two dimensions, with explained variance 
+      displayed on the axes.
+
+    """
     # Perform PCA to reduce to 2 components
     scaler = StandardScaler()
     data = scaler.fit_transform(data)
@@ -321,6 +404,50 @@ def plot_clustering_accordind_to_additional_points(data, additional_points, silh
 
 
 def plot_distributions(concepts_target, y_max=None, file_path=None):
+    """
+    Plots the distribution of values for each column in the given array using histograms.
+
+    This function visualizes the distribution of values for each column in a 2D numpy array, 
+    providing statistical insights such as mean, standard deviation, maximum, and minimum for 
+    each column. It generates histograms for each column and allows for saving the figure.
+
+    Parameters:
+    ----------
+    concepts_target : numpy.ndarray
+        A 2D numpy array where each column represents different concepts or prototypes, 
+        and each row corresponds to observations or samples.
+
+    y_max : float, optional
+        The maximum limit for the y-axis of the histograms. If provided, it will standardize 
+        the y-axis across all subplots. Defaults to None, allowing automatic scaling.
+
+    file_path : str, optional
+        The file path where the figure should be saved. If provided, the figure will be saved 
+        in high resolution (300 dpi). Defaults to None, meaning the figure will not be saved.
+
+    Returns:
+    -------
+    None
+        This function does not return any value. It generates and displays a plot directly.
+
+    Example:
+    --------
+    import numpy as np
+    
+    # Create a sample 2D array of concept activations
+    concept_activations = np.random.rand(100, 10)  # 100 samples for 10 prototypes
+    
+    # Call the plotting function
+    plot_distributions(concept_activations, y_max=50, file_path='distributions.png')
+
+    Notes:
+    ------
+    - The function requires the `matplotlib` and `seaborn` libraries for plotting. Make sure 
+      these libraries are installed in your environment.
+    - The histograms show the density of values in each column, providing a visual understanding 
+      of the distribution characteristics.
+
+    """
     num_colonne = concepts_target.shape[1]
 
     # Calcola statistiche delle colonne
@@ -365,6 +492,44 @@ def plot_distributions(concepts_target, y_max=None, file_path=None):
 
 
 def concept_boxplots(array):
+    """
+    Creates boxplots for each column of the input array and calculates relevant statistics.
+
+    This function visualizes the distribution of data in each column of a given 2D numpy array 
+    using boxplots. It also calculates and prints key statistics such as mean, standard deviation, 
+    and outlier percentages.
+
+    Parameters:
+    ----------
+    array : numpy.ndarray
+        A 2D numpy array where each column represents a different concept activation or 
+        squared error values. The function assumes the array has multiple rows for different 
+        samples or observations.
+
+    Returns:
+    -------
+    None
+        This function does not return any value. It generates a boxplot and prints statistics 
+        directly to the console.
+
+    Example:
+    --------
+    import numpy as np
+    
+    # Create a sample 2D array of squared errors
+    squared_errors = np.random.rand(100, 5)  # 100 samples with 5 concepts
+
+    # Call the plotting function
+    concept_boxplots(squared_errors)
+
+    Notes:
+    ------
+    - The function requires the `seaborn` and `matplotlib` libraries for plotting. Make sure 
+      these libraries are installed in your environment.
+    - The boxplots help to visualize the central tendency and dispersion of data, while 
+      outlier statistics provide insights into the presence of extreme values.
+
+    """
     plt.figure(figsize=(8, 6))  # Adjust the size of the plot
     sns.boxplot(data=array)
 
@@ -390,8 +555,8 @@ def concept_boxplots(array):
     # Print the statistics
     print("Mean of each column:", mean_per_column)
     print("Standard deviation of each column:", std_per_column)
-    print("Percentage of outliers in each column:", outlier_percentage)
-    print("Percentage of big values in each column:", strong_outlier_percentage)
+    print("Percentage of values outside the boxplot whiskers in each column:", outlier_percentage)
+    print("Percentage of values greater then 0.03 in each column:", strong_outlier_percentage)
 
     # Customize plot labels and ticks
     plt.title('Boxplots for Each Column of Squared Errors')
@@ -403,6 +568,43 @@ def concept_boxplots(array):
     plt.show()
 
 def plot_percentage_values(array):
+    """
+    Plots the percentage of points in an array that have at least N values greater than a threshold.
+
+    This function computes and visualizes the percentage of rows in a given 2D numpy array that 
+    have at least 1, 2, 3, 4, or 5 values greater than each value in the input array. The results 
+    are displayed as a line plot.
+
+    Parameters:
+    ----------
+    array : numpy.ndarray
+        A 1D or 2D numpy array where each element represents a concept activation target (z). 
+        If a 2D array is provided, the function evaluates each row for activations above the 
+        threshold values specified by the input array.
+
+    Returns:
+    -------
+    None
+        This function does not return any value. It generates a plot directly.
+
+    Example:
+    --------
+    import numpy as np
+    
+    # Create a sample 2D array of activations
+    activations = np.random.rand(100, 10)  # 100 samples with 10 activations each
+    
+    # Call the plotting function
+    plot_percentage_values(activations)
+
+    Notes:
+    ------
+    - The function assumes that the input array is a numpy array. Ensure that numpy and matplotlib 
+      are imported in your environment.
+    - The plot displays percentages on the y-axis and the concept activation targets on the x-axis,
+      making it easy to visualize the distribution of activation values across different thresholds.
+
+    """
     percent_one_value = []
     percent_two_values = []
     percent_three_values = []
@@ -440,6 +642,69 @@ def plot_percentage_values(array):
 
 
 def plotSpectrogram(ax, spectrogram, title, vmax, vmin, denorm=None, cut=None):
+    """
+    Plots a single spectrogram on a given axis.
+
+    This function takes a spectrogram array and visualizes it using a heatmap. It allows for 
+    denormalization of the spectrogram data and can truncate the time axis if specified. 
+
+    Parameters:
+    ----------
+    ax : matplotlib.axes.Axes
+        The axis on which to plot the spectrogram. This allows for multiple spectrograms to be 
+        plotted in subplots.
+
+    spectrogram : numpy.ndarray
+        A 2D array representing the spectrogram data. One axis typically represents frequency 
+        and the other represents time. The input should be in a format compatible with heatmap 
+        visualization.
+
+    title : str
+        The title for the spectrogram plot. This will be displayed above the heatmap for context.
+
+    vmax : float, optional
+        The maximum value for the color scale. It defines the upper limit of the colormap used 
+        for visualizing the spectrogram.
+
+    vmin : float, optional
+        The minimum value for the color scale. It defines the lower limit of the colormap used 
+        for visualizing the spectrogram.
+
+    denorm : tuple of (float, float), optional
+        A tuple containing the mean and standard deviation to denormalize the spectrogram data. 
+        If provided, the function will adjust the spectrogram values back to their original scale.
+
+    cut : int, optional
+        An integer specifying the number of time frames to keep in the spectrogram. If provided, 
+        it will truncate the spectrogram to only show data for the first `cut` time frames.
+
+    Returns:
+    -------
+    None
+        This function does not return any value. It generates a plot directly on the provided axis.
+
+    Example:
+    --------
+    import numpy as np
+    import matplotlib.pyplot as plt
+    
+    # Create a new figure and axis
+    fig, ax = plt.subplots()
+    
+    # Create a sample spectrogram data
+    spectrogram = np.random.rand(100, 200)  # Example 2D array for frequencies and time
+    
+    # Call the plotting function
+    plotSpectrogram(ax, spectrogram, title='Sample Spectrogram', vmax=1, vmin=0)
+
+    Notes:
+    ------
+    - The function uses the `seaborn` library to create the heatmap. Ensure that `seaborn` is 
+      installed in your environment.
+    - The y-axis is inverted by default, which is typical for spectrogram representations, 
+      where lower frequencies are usually displayed at the bottom.
+
+    """
     spectrogram = spectrogram.numpy()
     if (denorm is not None):
         mean, std = denorm
@@ -464,6 +729,67 @@ def plotSpectrogram(ax, spectrogram, title, vmax, vmin, denorm=None, cut=None):
     ax.invert_yaxis()
 
 def plotSpectrograms(spectrograms, titles, vmax, vmin, denorm=None, cut = None):
+    """
+    Plots multiple spectrograms in a grid format.
+
+    This function takes a list of spectrograms and visualizes them in a series of subplots, 
+    allowing for comparative analysis of different spectrograms. Each spectrogram is plotted 
+    with a specific color scale defined by the `vmax` and `vmin` parameters.
+
+    Parameters:
+    ----------
+    spectrograms : list of numpy.ndarray
+        A list containing the spectrogram data to be plotted. Each spectrogram should be a 
+        2D array where one axis represents time and the other represents frequency.
+
+    titles : list of str
+        A list of titles corresponding to each spectrogram. The titles will be displayed above 
+        each subplot for clarity.
+
+    vmax : float
+        The maximum value for the color scale. It defines the upper limit of the colormap 
+        used for visualizing the spectrograms.
+
+    vmin : float
+        The minimum value for the color scale. It defines the lower limit of the colormap 
+        used for visualizing the spectrograms.
+
+    denorm : function, optional
+        A function to denormalize the spectrogram data if it has been normalized. This allows 
+        for the restoration of the original scale of the data for accurate visualization.
+
+    cut : float, optional
+        A value to limit the display range of the spectrograms. If provided, it will truncate 
+        values above the specified cut-off, which can be useful for focusing on specific 
+        frequency ranges.
+
+    Returns:
+    -------
+    None
+        This function does not return any value. It generates plots directly to the output.
+
+    Example:
+    --------
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    # Create some sample spectrogram data
+    spectrogram1 = np.random.rand(100, 100)
+    spectrogram2 = np.random.rand(100, 100)
+    spectrograms = [spectrogram1, spectrogram2]
+    titles = ['Spectrogram 1', 'Spectrogram 2']
+    
+    # Call the plotting function
+    plotSpectrograms(spectrograms, titles, vmax=1, vmin=0)
+
+    Notes:
+    ------
+    - The function assumes that the `plotSpectrogram` function is defined elsewhere in your code,
+      which handles the individual plotting of each spectrogram.
+    - The layout of the subplots is dynamically adjusted based on the number of spectrograms,
+      ensuring that they fit well within the specified figure size.
+
+    """
     n = len(spectrograms)
     fig, axes = plt.subplots(math.ceil(n/3), 3, figsize=(15, 5*math.ceil(n/3)))
     # Esegui il plot per ogni spettrogramma
