@@ -491,7 +491,7 @@ def plot_distributions(concepts_target, y_max=None, file_path=None):
     plt.show()
 
 
-def concept_boxplots(array):
+def concept_boxplots(array, ylabel='Squared Error', title='Boxplots for Each Column of Squared Errors'):
     """
     Creates boxplots for each column of the input array and calculates relevant statistics.
 
@@ -559,9 +559,9 @@ def concept_boxplots(array):
     print("Percentage of values greater then 0.03 in each column:", strong_outlier_percentage)
 
     # Customize plot labels and ticks
-    plt.title('Boxplots for Each Column of Squared Errors')
+    plt.title(title)
     plt.xlabel('Concept Activations')
-    plt.ylabel('Squared Error')
+    plt.ylabel(ylabel)
     plt.yticks([0.03, 0.2,  0.4, 0.6, 0.8, 1])  # Adjust the step as necessary
     
     # Show the plot
