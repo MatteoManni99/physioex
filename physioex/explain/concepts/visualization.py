@@ -611,7 +611,8 @@ def plot_percentage_values(array):
     percent_four_values = []
     percent_five_values = []
 
-    for x in array:
+    x_values = np.arange(0.0, 1.01, 0.01)
+    for x in x_values:
         count_one_value = np.sum(np.any(array > x, axis=1))
         percent_one_value.append((count_one_value / len(array)) * 100)
         
@@ -628,11 +629,11 @@ def plot_percentage_values(array):
         percent_five_values.append((count_five_values / len(array)) * 100)
 
     plt.figure(figsize=(10, 6))
-    plt.plot(array, percent_one_value, label='at least 1 activations > z', color='blue', linestyle='-', linewidth=2)
-    plt.plot(array, percent_two_values, label='at least 2 activations > z', color='red', linestyle='-', linewidth=2)
-    plt.plot(array, percent_three_values, label='at least 3 activations > z', color='green', linestyle='-', linewidth=2)
-    plt.plot(array, percent_four_values, label='at least 4 activations > z', color='orange', linestyle='-', linewidth=2)
-    plt.plot(array, percent_five_values, label='at least 5 activations > z', color='black', linestyle='-', linewidth=2)
+    plt.plot(x_values, percent_one_value, label='at least 1 activations > z', color='blue', linestyle='-', linewidth=2)
+    plt.plot(x_values, percent_two_values, label='at least 2 activations > z', color='red', linestyle='-', linewidth=2)
+    plt.plot(x_values, percent_three_values, label='at least 3 activations > z', color='green', linestyle='-', linewidth=2)
+    plt.plot(x_values, percent_four_values, label='at least 4 activations > z', color='orange', linestyle='-', linewidth=2)
+    plt.plot(x_values, percent_five_values, label='at least 5 activations > z', color='black', linestyle='-', linewidth=2)
     plt.xlabel('Concept Activation Target (z)')
     plt.ylabel('Percentage of points (%)')
     plt.title('Percentage of Points with at least N values > z in Concept Activation Targets')
